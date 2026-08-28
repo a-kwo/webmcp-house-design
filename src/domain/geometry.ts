@@ -185,8 +185,40 @@ export function roomWalls(plan: Floorplan, room: Room): Wall[] {
   return room.wallIds.map((id) => wallsById.get(id)).filter((wall): wall is Wall => Boolean(wall));
 }
 
+export function samePoint(a: Point, b: Point, tolerance = 0.001): boolean {
+  return Math.abs(a.x - b.x) <= tolerance && Math.abs(a.y - b.y) <= tolerance;
+}
+
+/**
+ * Walks the room's walls end to end so the polygon is correct even when a wall
+ * is shared with a neighbouring room and therefore runs in the opposite
+ * direction for one of them.
+ */
 export function roomPolygon(plan: Floorplan, room: Room): Point[] {
-  return roomWalls(plan, room).map((wall) => wall.start);
+  const walls = roomWalls(plan, room);
+  if (walls.length === 0) {
+    return [];
+  }
+
+  const points: Point[] = [walls[0].start, walls[0].end];
+  const remaining = walls.slice(1);
+
+  while (remaining.length > 0) {
+    const tail = points[points.length - 1];
+    const index = remaining.findIndex((wall) => samePoint(wall.start, tail) || samePoint(wall.end, tail));
+    if (index === -1) {
+      break;
+    }
+
+    const [next] = remaining.splice(index, 1);
+    points.push(samePoint(next.start, tail) ? next.end : next.start);
+  }
+
+  if (points.length > 1 && samePoint(points[0], points[points.length - 1])) {
+    points.pop();
+  }
+
+  return points;
 }
 
 export function polygonCentroid(points: Point[]): Point {

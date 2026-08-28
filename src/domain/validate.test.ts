@@ -54,19 +54,24 @@ function find(plan: Floorplan, code: string, previous?: Floorplan): Violation | 
   return validate(plan, previous).find((violation) => violation.code === code);
 }
 
+/** The sample kitchen with the island slid east to squeeze the work aisle. */
+function tightKitchen(islandX: number): Floorplan {
+  const plan = clonePlan(sampleFloorplan);
+  plan.furniture.find((item) => item.id === 'island-1')!.position = { x: islandX, y: 78 };
+  return plan;
+}
+
 function findAll(plan: Floorplan, code: string): Violation[] {
   return validate(plan).filter((violation) => violation.code === code);
 }
 
 describe('the sample floorplan baseline', () => {
-  it('reports only genuine problems, with no duplicate codes per element pair', () => {
+  it('opens with exactly one deliberate problem for the demo to fix', () => {
+    // The sample is demo data: it carries one legible violation on purpose and
+    // nothing accidental. Rules are exercised by explicit fixtures below, not
+    // by leaving the sample broken.
     const violations = validate(sampleFloorplan);
-    expect([...new Set(violations.map((violation) => violation.code))].sort()).toEqual([
-      'DOOR_MIN_WIDTH',
-      'DOOR_SWING_CLASH',
-      'FURNITURE_OVERLAP',
-      'KITCHEN_AISLE',
-    ]);
+    expect(violations.map((violation) => violation.code)).toEqual(['DOOR_MIN_WIDTH']);
   });
 
   it('gives every violation a human message, a suggestion, and element ids to highlight', () => {
@@ -180,7 +185,7 @@ describe('circulation rules', () => {
 describe('fixture and clearance rules', () => {
   it('flags something parked in the toilet approach', () => {
     const plan = clonePlan(sampleFloorplan);
-    plan.furniture.find((item) => item.id === 'sink-1')!.position = { x: 165, y: 230 };
+    plan.furniture.find((item) => item.id === 'sink-1')!.position = { x: 165, y: 198 };
 
     const violation = find(plan, 'TOILET_CLEARANCE');
     expect(violation?.message).toContain('21in clear in front');
@@ -196,12 +201,14 @@ describe('fixture and clearance rules', () => {
   });
 
   it('flags a tight kitchen aisle as an error and a merely snug one as a warning', () => {
-    expect(find(sampleFloorplan, 'KITCHEN_AISLE')?.severity).toBe('error');
+    // Island back east to 288 leaves a 21in aisle against the range.
+    const tight = tightKitchen(288);
+    expect(find(tight, 'KITCHEN_AISLE')?.severity).toBe('error');
+    expect(find(tight, 'KITCHEN_AISLE')?.message).toContain('21in');
 
-    const roomy = clonePlan(sampleFloorplan);
-    roomy.furniture.find((item) => item.id === 'range-1')!.position = { x: 380, y: 54 };
-
-    const violation = find(roomy, 'KITCHEN_AISLE');
+    // 268 leaves 41in: clears the 40in minimum, under the 42in two-cook target.
+    const snug = tightKitchen(268);
+    const violation = find(snug, 'KITCHEN_AISLE');
     expect(violation?.severity).toBe('warning');
     expect(violation?.message).toContain('two-cook');
   });
@@ -241,7 +248,9 @@ describe('fixture and clearance rules', () => {
     const hard = findAll(plan, 'FURNITURE_OVERLAP').find((violation) => violation.elementIds.includes('chair-1'));
     expect(hard?.severity).toBe('error');
 
-    const clearanceOnly = findAll(sampleFloorplan, 'FURNITURE_OVERLAP')[0];
+    // The island and range footprints clear each other; only their approach
+    // zones collide, which is a warning rather than an error.
+    const clearanceOnly = findAll(tightKitchen(288), 'FURNITURE_OVERLAP')[0];
     expect(clearanceOnly.severity).toBe('warning');
     expect(clearanceOnly.message).toContain('approach zones overlap');
   });
@@ -249,9 +258,13 @@ describe('fixture and clearance rules', () => {
 
 describe('door swing rules', () => {
   it('sweeps the room the door opens into, not an arbitrary side of the wall', () => {
-    // hall-bath hangs on the bathroom's east wall and opens into the bathroom,
-    // where it catches the toilet.
-    const clash = findAll(sampleFloorplan, 'DOOR_SWING_CLASH').find((violation) => violation.elementIds.includes('hall-bath'));
+    // hall-bath hangs on the bathroom's east wall and opens into the bathroom.
+    // Put the toilet back in that arc and it must be caught; if the swing were
+    // taken from the wall's direction instead, it would sweep the hallway.
+    const plan = clonePlan(sampleFloorplan);
+    plan.furniture.find((item) => item.id === 'toilet-1')!.position = { x: 192, y: 230 };
+
+    const clash = findAll(plan, 'DOOR_SWING_CLASH').find((violation) => violation.elementIds.includes('hall-bath'));
 
     expect(clash?.message).toContain('toilet');
     expect(clash?.elementIds).toContain('toilet-1');
