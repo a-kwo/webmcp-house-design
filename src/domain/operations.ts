@@ -1,5 +1,6 @@
 import {
   boundingBox,
+  coincidentWalls,
   distance,
   roomPolygon,
   samePoint,
@@ -73,37 +74,6 @@ function uniqueId(plan: Floorplan, base: string): string {
   }
 
   return `${base}-${suffix}`;
-}
-
-/**
- * Walls lying on the same line as `wall` whose spans genuinely overlap, which
- * is how a partition drawn once per room is recognised as one physical wall.
- * Segments meeting end to end at a single point are not included.
- */
-function coincidentWalls(plan: Floorplan, wall: Wall): Wall[] {
-  const vertical = isVertical(wall);
-
-  return plan.walls.filter((candidate) => {
-    if (candidate.id === wall.id) {
-      return true;
-    }
-
-    if (vertical) {
-      if (!isVertical(candidate) || Math.abs(candidate.start.x - wall.start.x) > 0.001) {
-        return false;
-      }
-      const a = [Math.min(wall.start.y, wall.end.y), Math.max(wall.start.y, wall.end.y)];
-      const b = [Math.min(candidate.start.y, candidate.end.y), Math.max(candidate.start.y, candidate.end.y)];
-      return Math.min(a[1], b[1]) - Math.max(a[0], b[0]) > 0.001;
-    }
-
-    if (!isHorizontal(candidate) || Math.abs(candidate.start.y - wall.start.y) > 0.001) {
-      return false;
-    }
-    const a = [Math.min(wall.start.x, wall.end.x), Math.max(wall.start.x, wall.end.x)];
-    const b = [Math.min(candidate.start.x, candidate.end.x), Math.max(candidate.start.x, candidate.end.x)];
-    return Math.min(a[1], b[1]) - Math.max(a[0], b[0]) > 0.001;
-  });
 }
 
 /**

@@ -180,6 +180,46 @@ export function polygonGap(a: Point[], b: Point[]): number {
   return shortest;
 }
 
+export function isVerticalWall(wall: Wall): boolean {
+  return Math.abs(wall.start.x - wall.end.x) < 0.001;
+}
+
+export function isHorizontalWall(wall: Wall): boolean {
+  return Math.abs(wall.start.y - wall.end.y) < 0.001;
+}
+
+/**
+ * Walls lying on the same line as `wall` whose spans genuinely overlap, which
+ * is how a partition drawn once per room is recognised as one physical wall.
+ * Segments meeting end to end at a single point are not included. `wall` itself
+ * is always in the result.
+ */
+export function coincidentWalls(plan: Floorplan, wall: Wall): Wall[] {
+  const vertical = isVerticalWall(wall);
+
+  return plan.walls.filter((candidate) => {
+    if (candidate.id === wall.id) {
+      return true;
+    }
+
+    if (vertical) {
+      if (!isVerticalWall(candidate) || Math.abs(candidate.start.x - wall.start.x) > 0.001) {
+        return false;
+      }
+      const a = [Math.min(wall.start.y, wall.end.y), Math.max(wall.start.y, wall.end.y)];
+      const b = [Math.min(candidate.start.y, candidate.end.y), Math.max(candidate.start.y, candidate.end.y)];
+      return Math.min(a[1], b[1]) - Math.max(a[0], b[0]) > 0.001;
+    }
+
+    if (!isHorizontalWall(candidate) || Math.abs(candidate.start.y - wall.start.y) > 0.001) {
+      return false;
+    }
+    const a = [Math.min(wall.start.x, wall.end.x), Math.max(wall.start.x, wall.end.x)];
+    const b = [Math.min(candidate.start.x, candidate.end.x), Math.max(candidate.start.x, candidate.end.x)];
+    return Math.min(a[1], b[1]) - Math.max(a[0], b[0]) > 0.001;
+  });
+}
+
 export function roomWalls(plan: Floorplan, room: Room): Wall[] {
   const wallsById = new Map(plan.walls.map((wall) => [wall.id, wall]));
   return room.wallIds.map((id) => wallsById.get(id)).filter((wall): wall is Wall => Boolean(wall));

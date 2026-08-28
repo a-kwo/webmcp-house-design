@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { computeRoomSummaries } from '../domain/geometry';
 import { validate } from '../domain/validate';
 import { registerFloorplanTools, resolveModelContext } from '../mcp/tools';
+import { Scene } from './Scene';
 import { useFloorplanStore } from '../state/floorplanStore';
 
 export function App() {
@@ -74,17 +75,43 @@ export function App() {
           </ul>
         </section>
         <section>
-          <h2>Violations</h2>
-          <strong>{violations.length}</strong>
+          <h2>
+            Violations <span className="count">{violations.length}</span>
+          </h2>
+          {violations.length === 0 ? (
+            <p className="note">Nothing breaks the simplified rules right now.</p>
+          ) : (
+            <ul className="violations">
+              {violations.map((violation, index) => (
+                <li
+                  // A rule can fire more than once for the same code, so the
+                  // elements it names are what make the key unique.
+                  key={`${violation.code}-${violation.elementIds.join('-')}-${index}`}
+                  className={
+                    violation.elementIds.some((id) => selection.elementIds.includes(id))
+                      ? 'selected'
+                      : undefined
+                  }
+                  // Selecting everything the violation names lights the whole
+                  // problem up in the scene, not just its first element.
+                  onClick={() => select(violation.elementIds)}
+                >
+                  <span className={`badge ${violation.severity}`}>{violation.severity}</span>
+                  <p className="violation-message">{violation.message}</p>
+                  {violation.suggestion ? (
+                    <p className="violation-suggestion">{violation.suggestion}</p>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          )}
         </section>
         <section>
           <h2>Agent tools</h2>
           <code>{toolsReady ? 'registered' : 'no WebMCP browser'}</code>
         </section>
       </aside>
-      <section className="viewport-placeholder">
-        <p>3D scene comes next. The constraint engine and tool layer are live underneath.</p>
-      </section>
+      <Scene />
     </main>
   );
 }

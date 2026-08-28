@@ -460,7 +460,7 @@ export async function registerFloorplanTools(
   };
 }
 
-function describeCamera(plan: Floorplan, mode: string, targetRoomId?: string): string {
+export function describeCamera(plan: Floorplan, mode: string, targetRoomId?: string): string {
   const room = plan.rooms.find((candidate) => candidate.id === targetRoomId);
 
   if (mode === 'firstPerson' && room) {

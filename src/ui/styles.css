@@ -18,6 +18,8 @@ body {
   border-right: 1px solid #343434;
   padding: 20px;
   background: #20201f;
+  max-height: 100vh;
+  overflow-y: auto;
 }
 
 .eyebrow {
@@ -73,12 +75,56 @@ code {
   font-size: 12px;
 }
 
-.viewport-placeholder {
-  align-items: center;
+.viewport {
   background: #151515;
-  color: #777168;
+  position: relative;
+}
+
+.viewport canvas {
+  display: block;
+  touch-action: none;
+}
+
+.camera-bar {
+  align-items: center;
+  background: rgba(23, 23, 23, 0.82);
+  border: 1px solid #343434;
+  border-radius: 8px;
   display: flex;
-  justify-content: center;
+  gap: 6px;
+  left: 16px;
+  padding: 6px;
+  position: absolute;
+  top: 16px;
+}
+
+.camera-bar button {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  color: #aaa59b;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  padding: 5px 10px;
+}
+
+.camera-bar button:hover {
+  color: #e6e2d8;
+}
+
+.camera-bar button.active {
+  border-color: #6ea8fe;
+  color: #e6e2d8;
+}
+
+.camera-note {
+  border-left: 1px solid #343434;
+  color: #777168;
+  font-size: 12px;
+  margin-left: 4px;
+  max-width: 320px;
+  padding-left: 10px;
 }
 
 .left-rail li {
@@ -88,4 +134,111 @@ code {
 .left-rail li.selected {
   outline: 1px solid #6ea8fe;
   outline-offset: 2px;
+}
+
+.count {
+  background: #2c2c2b;
+  border-radius: 10px;
+  color: #d2c7ae;
+  font-size: 11px;
+  padding: 1px 7px;
+}
+
+/* Violations need a stacked block, not the two-column row the rail uses. */
+.violations li {
+  display: block;
+  padding: 12px 0;
+}
+
+.badge {
+  border-radius: 3px;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  padding: 2px 6px;
+  text-transform: uppercase;
+}
+
+.badge.error {
+  background: rgba(199, 118, 118, 0.16);
+  color: #d98b8b;
+}
+
+.badge.warning {
+  background: rgba(216, 166, 87, 0.14);
+  color: #d8a657;
+}
+
+.violation-message {
+  color: #e6e2d8;
+  font-size: 13px;
+  line-height: 1.45;
+  margin: 8px 0 0;
+}
+
+.violation-suggestion {
+  color: #aaa59b;
+  font-size: 12px;
+  line-height: 1.45;
+  margin: 6px 0 0;
+}
+
+.variant-bar {
+  background: rgba(23, 23, 23, 0.88);
+  border: 1px solid #343434;
+  border-radius: 8px;
+  bottom: 16px;
+  left: 16px;
+  padding: 12px;
+  position: absolute;
+  right: 16px;
+}
+
+.variant-goal {
+  color: #d8a657;
+  font-size: 12px;
+  letter-spacing: 0.02em;
+  margin: 0 0 10px;
+  text-transform: uppercase;
+}
+
+.variant-cards {
+  display: flex;
+  gap: 10px;
+}
+
+.variant-card {
+  border: 1px solid #343434;
+  border-radius: 6px;
+  cursor: pointer;
+  flex: 1;
+  padding: 10px 12px;
+}
+
+.variant-card.active {
+  border-color: #d8a657;
+}
+
+.variant-summary {
+  color: #e6e2d8;
+  font-size: 13px;
+  line-height: 1.4;
+  margin: 0 0 10px;
+}
+
+.variant-foot {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+}
+
+.variant-card button {
+  background: #d8a657;
+  border: 0;
+  border-radius: 4px;
+  color: #1b1b1a;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 5px 12px;
 }
