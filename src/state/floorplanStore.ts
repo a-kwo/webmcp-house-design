@@ -1,0 +1,182 @@
+import { createStore } from 'zustand/vanilla';
+import { useStore } from 'zustand';
+import type { OperationResult } from '../domain/operations';
+import { sampleFloorplan } from '../domain/sampleFloorplan';
+import type { Floorplan, Violation } from '../domain/types';
+import { validate } from '../domain/validate';
+
+const UNDO_LIMIT = 30;
+
+export type SelectionKind = 'wall' | 'room' | 'opening' | 'furniture';
+
+export type Selection = {
+  elementIds: string[];
+  kind: SelectionKind | null;
+};
+
+export type CameraMode = 'top' | 'iso' | 'firstPerson';
+
+export type Camera = {
+  mode: CameraMode;
+  targetRoomId: string | null;
+  description: string;
+};
+
+export type Variant = {
+  id: string;
+  goal: string;
+  summary: string;
+  plan: Floorplan;
+};
+
+/**
+ * The envelope every write tool returns, so the agent sees the constraint
+ * consequences of its own edit without a second round trip.
+ */
+export type ToolEnvelope =
+  | { ok: true; changed: string[]; violations: Violation[]; summary: string }
+  | { ok: false; error: string };
+
+export type FloorplanState = {
+  plan: Floorplan;
+  selection: Selection;
+  camera: Camera;
+  undoStack: Floorplan[];
+  variants: Variant[];
+
+  applyOperation: (operation: (plan: Floorplan) => OperationResult) => ToolEnvelope;
+  select: (elementIds: string[]) => void;
+  clearSelection: () => void;
+  setCamera: (camera: Partial<Camera>) => void;
+  setVariants: (variants: Variant[]) => void;
+  applyVariant: (variantId: string) => ToolEnvelope;
+  undo: (steps?: number) => ToolEnvelope;
+  reset: () => void;
+};
+
+function kindOf(plan: Floorplan, elementId: string): SelectionKind | null {
+  if (plan.walls.some((wall) => wall.id === elementId)) {
+    return 'wall';
+  }
+  if (plan.rooms.some((room) => room.id === elementId)) {
+    return 'room';
+  }
+  if (plan.openings.some((opening) => opening.id === elementId)) {
+    return 'opening';
+  }
+  if (plan.furniture.some((item) => item.id === elementId)) {
+    return 'furniture';
+  }
+  return null;
+}
+
+function pushUndo(stack: Floorplan[], plan: Floorplan): Floorplan[] {
+  return [...stack, plan].slice(-UNDO_LIMIT);
+}
+
+export const floorplanStore = createStore<FloorplanState>()((set, get) => ({
+  plan: sampleFloorplan,
+  selection: { elementIds: [], kind: null },
+  camera: { mode: 'iso', targetRoomId: null, description: 'Looking down at the whole plan from the south-east.' },
+  undoStack: [],
+  variants: [],
+
+  applyOperation: (operation) => {
+    const previous = get().plan;
+    const result = operation(previous);
+
+    if (!result.ok) {
+      return { ok: false, error: result.error };
+    }
+
+    // Passing the previous plan lets the structural rule see the edit itself.
+    const violations = validate(result.plan, previous);
+
+    set((state) => ({
+      plan: result.plan,
+      undoStack: pushUndo(state.undoStack, previous),
+    }));
+
+    return { ok: true, changed: result.changed, violations, summary: result.summary };
+  },
+
+  select: (elementIds) => {
+    const plan = get().plan;
+    const known = elementIds.filter((id) => kindOf(plan, id) !== null);
+    set({ selection: { elementIds: known, kind: known.length > 0 ? kindOf(plan, known[0]) : null } });
+  },
+
+  clearSelection: () => set({ selection: { elementIds: [], kind: null } }),
+
+  setCamera: (camera) => set((state) => ({ camera: { ...state.camera, ...camera } })),
+
+  setVariants: (variants) => set({ variants }),
+
+  applyVariant: (variantId) => {
+    const state = get();
+    const variant = state.variants.find((candidate) => candidate.id === variantId);
+
+    if (!variant) {
+      const available = state.variants.map((candidate) => candidate.id).join(', ');
+      return {
+        ok: false,
+        error: available
+          ? `No variant "${variantId}" on screen. Currently showing: ${available}.`
+          : `No variants are on screen; call propose_variants first.`,
+      };
+    }
+
+    const previous = state.plan;
+    const violations = validate(variant.plan, previous);
+
+    set({
+      plan: variant.plan,
+      undoStack: pushUndo(state.undoStack, previous),
+      variants: [],
+    });
+
+    return {
+      ok: true,
+      changed: [variant.id],
+      violations,
+      summary: `Applied variant ${variant.id}: ${variant.summary}`,
+    };
+  },
+
+  undo: (steps = 1) => {
+    const state = get();
+    const available = state.undoStack.length;
+
+    if (available === 0) {
+      return { ok: false, error: 'Nothing to undo; this is the original plan.' };
+    }
+
+    const take = Math.min(Math.max(1, Math.floor(steps)), available);
+    const target = state.undoStack[available - take];
+    const previous = state.plan;
+
+    set({ plan: target, undoStack: state.undoStack.slice(0, available - take) });
+
+    return {
+      ok: true,
+      changed: [],
+      violations: validate(target, previous),
+      summary: take === available && steps > available
+        ? `Undid all ${take} available step(s); ${steps} were requested.`
+        : `Undid ${take} step(s).`,
+    };
+  },
+
+  reset: () =>
+    set({
+      plan: sampleFloorplan,
+      selection: { elementIds: [], kind: null },
+      camera: { mode: 'iso', targetRoomId: null, description: 'Looking down at the whole plan from the south-east.' },
+      undoStack: [],
+      variants: [],
+    }),
+}));
+
+export function useFloorplanStore<T>(selector: (state: FloorplanState) => T): T {
+  return useStore(floorplanStore, selector);
+}

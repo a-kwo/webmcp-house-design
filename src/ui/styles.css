@@ -80,3 +80,12 @@ code {
   display: flex;
   justify-content: center;
 }
+
+.left-rail li {
+  cursor: pointer;
+}
+
+.left-rail li.selected {
+  outline: 1px solid #6ea8fe;
+  outline-offset: 2px;
+}
