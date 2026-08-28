@@ -260,6 +260,41 @@ export function resizeRoom(
   };
 }
 
+/**
+ * The room on the far side of a partition, at the span the opening occupies.
+ *
+ * Rooms drawn as independent rectangles each carry their own copy of a shared
+ * partition, so the neighbour is never an owner of `wall` itself -- it owns a
+ * coincident wall on the same line. A partition can also run past several
+ * rooms, so only the ones overlapping the opening count, and the largest
+ * overlap wins when an opening straddles a corner.
+ */
+function neighbourRoomAcross(plan: Floorplan, wall: Wall, offset: number, width: number): Room | undefined {
+  if (!isVertical(wall) && !isHorizontal(wall)) {
+    return undefined;
+  }
+
+  const axis: 'x' | 'y' = isVertical(wall) ? 'y' : 'x';
+  const from = wall.start[axis];
+  // Offsets run from wall.start, which is the far end for a wall drawn backwards.
+  const direction = Math.sign(wall.end[axis] - from) || 1;
+  const low = Math.min(from + direction * offset, from + direction * (offset + width));
+  const high = low + width;
+
+  const ownerIds = new Set(plan.rooms.filter((room) => room.wallIds.includes(wall.id)).map((room) => room.id));
+
+  return coincidentWalls(plan, wall)
+    .filter((candidate) => candidate.id !== wall.id)
+    .map((candidate) => {
+      const candidateLow = Math.min(candidate.start[axis], candidate.end[axis]);
+      const candidateHigh = Math.max(candidate.start[axis], candidate.end[axis]);
+      const room = plan.rooms.find((item) => item.wallIds.includes(candidate.id) && !ownerIds.has(item.id));
+      return { room, overlap: Math.min(high, candidateHigh) - Math.max(low, candidateLow) };
+    })
+    .filter((entry): entry is { room: Room; overlap: number } => Boolean(entry.room) && entry.overlap > 0.001)
+    .sort((first, second) => second.overlap - first.overlap)[0]?.room;
+}
+
 export function addOpening(
   plan: Floorplan,
   input: {
@@ -291,14 +326,20 @@ export function addOpening(
     );
   }
 
-  const rooms = plan.rooms.filter((room) => room.wallIds.includes(wall.id));
-  const connects: [string, string] = wall.exterior
-    ? [rooms[0]?.id ?? 'EXTERIOR', 'EXTERIOR']
-    : [rooms[0]?.id ?? 'EXTERIOR', rooms[1]?.id ?? 'EXTERIOR'];
+  const owners = plan.rooms.filter((room) => room.wallIds.includes(wall.id));
+  const primary = owners[0];
 
-  if (connects[0] === 'EXTERIOR') {
+  if (!primary) {
     return fail(`Wall ${wall.id} does not belong to any room, so an opening in it would connect nothing.`);
   }
+
+  // A wall the two rooms already share names both sides directly; otherwise the
+  // far side has to be found on the neighbour's own copy of the partition.
+  const across = wall.exterior
+    ? 'EXTERIOR'
+    : owners[1]?.id ?? neighbourRoomAcross(plan, wall, offset, width)?.id ?? 'EXTERIOR';
+
+  const connects: [string, string] = [primary.id, across];
 
   const next = clone(plan);
   const id = uniqueId(next, `${input.kind}-${wall.id}`);

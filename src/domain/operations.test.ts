@@ -116,9 +116,44 @@ describe('addOpening', () => {
     const result = expectOk(addOpening(sampleFloorplan, { wallId: 'bed1-N', kind: 'door', offsetIn: 12, widthIn: 36 }));
     const opening = result.plan.openings.find((candidate) => candidate.id === result.changed[0])!;
 
-    expect(opening.connects).toContain('bed1');
+    expect(opening.connects).toEqual(['bed1', 'living']);
     expect(opening.width).toBe(36);
     expect(opening.height).toBe(80);
+  });
+
+  it('names the room across a partition rather than the exterior', () => {
+    // bed1-E and bath-W are one physical wall drawn twice, once per room, so
+    // the far room is only reachable through the coincident copy.
+    const result = expectOk(addOpening(sampleFloorplan, { wallId: 'bed1-E', kind: 'door', offsetIn: 12, widthIn: 32 }));
+    const opening = result.plan.openings.find((candidate) => candidate.id === result.changed[0])!;
+
+    expect(opening.connects).toEqual(['bed1', 'bath']);
+  });
+
+  it('picks the room facing the opening when a wall runs past several', () => {
+    // living-E spans y 0-180: the kitchen sits against its northern half and
+    // the hallway against its southern, so the offset decides the answer.
+    const north = expectOk(addOpening(sampleFloorplan, { wallId: 'living-E', kind: 'door', offsetIn: 12, widthIn: 36 }));
+    const south = expectOk(addOpening(sampleFloorplan, { wallId: 'living-E', kind: 'door', offsetIn: 144, widthIn: 30 }));
+
+    const northDoor = north.plan.openings.find((candidate) => candidate.id === north.changed[0])!;
+    const southDoor = south.plan.openings.find((candidate) => candidate.id === south.changed[0])!;
+
+    expect(northDoor.connects).toEqual(['living', 'kitchen']);
+    expect(southDoor.connects).toEqual(['living', 'hall']);
+  });
+
+  it('does not let an interior door satisfy bedroom egress', () => {
+    const plan = JSON.parse(JSON.stringify(sampleFloorplan)) as Floorplan;
+    plan.openings = plan.openings.filter((opening) => opening.id !== 'bed2-window');
+
+    // bed2-W is interior; a door there reaches the hallway, not the outside.
+    const result = expectOk(addOpening(plan, { wallId: 'bed2-W', kind: 'door', offsetIn: 12, widthIn: 32 }));
+
+    const door = result.plan.openings.find((candidate) => candidate.id === result.changed[0])!;
+
+    expect(door.connects).toEqual(['bed2', 'hall']);
+    expect(validate(result.plan).some((violation) => violation.code === 'BEDROOM_EGRESS')).toBe(true);
   });
 
   it('marks an opening on an exterior wall as reaching the outside', () => {
