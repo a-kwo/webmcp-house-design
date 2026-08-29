@@ -6,20 +6,21 @@ export default defineConfig({
   build: {
     rollupOptions: {
       output: {
-        // Split by where a module came from rather than by naming packages:
-        // naming them pulls in whole libraries and defeats tree-shaking. Total
-        // bytes are unchanged either way; the point is that three barely ever
-        // changes while the app does, so it should not share a cache entry.
+        // Everything from node_modules in one chunk, so app code gets its own
+        // cache entry and editing it does not invalidate the dependencies.
+        //
+        // Giving three a chunk separate from the rest was tried and made the
+        // two import each other -- Rollup reports "Circular chunk: three ->
+        // vendor -> three", and circular chunks can evaluate out of order at
+        // runtime. Naming packages instead of matching on path was also tried
+        // and pulls in whole libraries, defeating tree-shaking.
         manualChunks(id) {
-          if (!id.includes('node_modules')) {
-            return undefined;
-          }
-          return id.includes('/three/') || id.includes('@react-three') ? 'three' : 'vendor';
+          return id.includes('node_modules') ? 'vendor' : undefined;
         },
       },
     },
-    // three alone is past the default 500kB. Nothing here can shrink it, so the
-    // limit reflects what a 3D app actually costs.
-    chunkSizeWarningLimit: 750,
+    // three is most of the bundle and nothing here can shrink it, so the limit
+    // reflects what a 3D app actually costs.
+    chunkSizeWarningLimit: 1200,
   },
 });

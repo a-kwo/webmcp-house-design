@@ -1,0 +1,9 @@
+# Netlify builds the site rather than serving the repo root: the index.html at
+# the root is Vite's dev entry and points at /src/main.tsx, which only resolves
+# after a build. The built site lands in dist/, which is gitignored.
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "22"
