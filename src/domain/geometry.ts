@@ -6,8 +6,20 @@ const SWING_ARC_SEGMENTS = 8;
 
 export type Box = { minX: number; minY: number; maxX: number; maxY: number };
 
-export function snapToGrid(value: number, grid = 6): number {
+/** Everything in a plan lands on this grid. */
+export const GRID_IN = 6;
+
+export function snapToGrid(value: number, grid = GRID_IN): number {
   return Math.round(value / grid) * grid;
+}
+
+/**
+ * Snaps up rather than to the nearest step. Widths are minimums -- asking for
+ * the smallest legal door and getting the grid step below it hands back
+ * something that still breaks the rule you were trying to satisfy.
+ */
+export function snapUpToGrid(value: number, grid = GRID_IN): number {
+  return Math.ceil(value / grid) * grid;
 }
 
 export function distance(a: Point, b: Point): number {

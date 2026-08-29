@@ -99,7 +99,7 @@ describe('violations panel', () => {
     render(<App />);
 
     expect(screen.getByText(/Door hall-bath is 30in clear/)).toBeDefined();
-    expect(screen.getByText(/Widen hall-bath by 2in/)).toBeDefined();
+    expect(screen.getByText(/Widen hall-bath to 36in/)).toBeDefined();
     expect(screen.getByText('error')).toBeDefined();
   });
 

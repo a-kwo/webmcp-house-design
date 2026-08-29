@@ -1,9 +1,11 @@
 import {
+  GRID_IN,
   boundingBox,
   coincidentWalls,
   distance,
   furniturePolygon,
   openingsOnWall,
+  snapUpToGrid,
   roomPolygon,
   samePoint,
   snapToGrid,
@@ -17,7 +19,6 @@ export type OperationResult =
   | { ok: true; plan: Floorplan; changed: string[]; summary: string }
   | { ok: false; error: string };
 
-const GRID_IN = 6;
 const MIN_ROOM_DIMENSION_IN = 24;
 // Operations reject only geometrically incoherent results. Whether a layout is
 // *good* is the constraint engine's call, so a move that merely creates a
@@ -354,7 +355,7 @@ export function addOpening(
 
   const span = distance(wall.start, wall.end);
   const offset = snapToGrid(input.offsetIn, GRID_IN);
-  const width = snapToGrid(input.widthIn, GRID_IN);
+  const width = snapUpToGrid(input.widthIn, GRID_IN);
 
   if (width <= 0) {
     return fail(`An opening needs a positive width; ${input.widthIn}in snaps to ${width}in.`);
@@ -411,7 +412,9 @@ export function addOpening(
     ok: true,
     plan: next,
     changed: [id, wall.id],
-    summary: `Added a ${width}in ${input.kind} (${id}) to ${wall.id}.`,
+    summary: width === input.widthIn
+      ? `Added a ${width}in ${input.kind} (${id}) to ${wall.id}.`
+      : `Added a ${width}in ${input.kind} (${id}) to ${wall.id}; ${input.widthIn}in was rounded up to the ${GRID_IN}in grid.`,
   };
 }
 

@@ -177,6 +177,32 @@ describe('addOpening', () => {
     expect(validate(result.plan).some((violation) => violation.code === 'BEDROOM_EGRESS')).toBe(true);
   });
 
+  it('rounds an opening width up, never down past the rule it has to clear', () => {
+    // 32in is the door minimum. Snapping to the nearest 6in step would land on
+    // 30in and leave the very violation the caller was trying to fix.
+    const result = expectOk(addOpening(sampleFloorplan, { wallId: 'hall-E', kind: 'door', offsetIn: 12, widthIn: 32 }));
+    const opening = result.plan.openings.find((candidate) => candidate.id === result.changed[0])!;
+
+    expect(opening.width).toBe(36);
+    expect(result.summary).toContain('rounded up');
+  });
+
+  it('says nothing about rounding when the width was already on the grid', () => {
+    const result = expectOk(addOpening(sampleFloorplan, { wallId: 'hall-E', kind: 'door', offsetIn: 12, widthIn: 36 }));
+
+    expect(result.summary).not.toContain('rounded up');
+  });
+
+  it('lets the door-width violation be fixed by following its own advice', () => {
+    const before = validate(sampleFloorplan).find((v) => v.code === 'DOOR_MIN_WIDTH')!;
+    const target = Number(before.suggestion!.match(/to (\d+)in/)![1]);
+
+    const stripped = expectOk(removeElement(sampleFloorplan, 'hall-bath'));
+    const widened = expectOk(addOpening(stripped.plan, { wallId: 'hall-W', kind: 'door', offsetIn: 42, widthIn: target }));
+
+    expect(validate(widened.plan).some((v) => v.code === 'DOOR_MIN_WIDTH')).toBe(false);
+  });
+
   it('marks an opening on an exterior wall as reaching the outside', () => {
     const result = expectOk(addOpening(sampleFloorplan, { wallId: 'bed2-E', kind: 'window', offsetIn: 12, widthIn: 36 }));
     const opening = result.plan.openings.find((candidate) => candidate.id === result.changed[0])!;

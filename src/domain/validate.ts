@@ -1,4 +1,5 @@
 import {
+  GRID_IN,
   boundingBox,
   convexPolygonsOverlap,
   distance,
@@ -11,6 +12,7 @@ import {
   roomDimensions,
   roomPolygon,
   roomWalls,
+  snapUpToGrid,
 } from './geometry';
 import type { Box } from './geometry';
 import type { Floorplan, Furniture, Opening, Point, Room, Violation, Wall } from './types';
@@ -141,7 +143,10 @@ function validateDoorWidths(plan: Floorplan): Violation[] {
       severity: 'error' as const,
       message: `Door ${opening.id} is ${formatIn(opening.width)} clear between ${describeConnects(plan, opening)}; simplified minimum is ${DOOR_MIN_WIDTH_IN}in.`,
       elementIds: [opening.id, opening.wallId],
-      suggestion: `Widen ${opening.id} by ${formatIn(DOOR_MIN_WIDTH_IN - opening.width)}, or make it an archway if the room needs no privacy.`,
+      // Name a width the grid can actually produce. Advising "widen by 2in"
+      // sends you to 32in, which snaps to the next step anyway -- and before
+      // openings rounded up, straight back to 30in and this same violation.
+      suggestion: `Widen ${opening.id} to ${snapUpToGrid(DOOR_MIN_WIDTH_IN, GRID_IN)}in, the next size the ${GRID_IN}in grid allows, or make it an archway if the room needs no privacy.`,
     }));
 }
 
