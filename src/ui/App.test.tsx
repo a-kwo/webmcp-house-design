@@ -108,7 +108,7 @@ describe('violations panel', () => {
 
     fireEvent.click(screen.getByText(/Door hall-bath is 30in clear/));
 
-    expect(floorplanStore.getState().selection.elementIds).toEqual(['hall-bath', 'bath-E']);
+    expect(floorplanStore.getState().selection.elementIds).toEqual(['hall-bath', 'hall-W']);
   });
 
   it('reports a clean plan rather than showing an empty list', () => {

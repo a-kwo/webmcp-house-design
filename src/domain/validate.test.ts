@@ -10,40 +10,25 @@ function clonePlan(plan: Floorplan): Floorplan {
 }
 
 /**
- * Sample rooms are rectangles whose four walls are named `<roomId>-<edge>`, so
- * moving one edge means updating the edge wall plus the two walls it meets.
+ * Moves one edge of a room. A partition is a single wall shared with whatever
+ * is on the other side, so every endpoint sitting on that edge moves with it
+ * and the neighbours stay attached -- the same thing move_wall does.
  */
 function setEdge(plan: Floorplan, roomId: string, edge: Edge, value: number): void {
-  const wallFor = (side: Edge) => plan.walls.find((wall) => wall.id === `${roomId}-${side}`)!;
+  const room = plan.rooms.find((candidate) => candidate.id === roomId)!;
+  const walls = plan.walls.filter((wall) => room.wallIds.includes(wall.id));
+  const axis: 'x' | 'y' = edge === 'E' || edge === 'W' ? 'x' : 'y';
 
-  if (edge === 'E') {
-    wallFor('E').start.x = value;
-    wallFor('E').end.x = value;
-    wallFor('N').end.x = value;
-    wallFor('S').start.x = value;
-    return;
+  const coords = walls.flatMap((wall) => [wall.start[axis], wall.end[axis]]);
+  const from = edge === 'E' || edge === 'S' ? Math.max(...coords) : Math.min(...coords);
+
+  for (const wall of plan.walls) {
+    for (const endpoint of [wall.start, wall.end]) {
+      if (Math.abs(endpoint[axis] - from) < 0.001) {
+        endpoint[axis] = value;
+      }
+    }
   }
-
-  if (edge === 'W') {
-    wallFor('W').start.x = value;
-    wallFor('W').end.x = value;
-    wallFor('N').start.x = value;
-    wallFor('S').end.x = value;
-    return;
-  }
-
-  if (edge === 'N') {
-    wallFor('N').start.y = value;
-    wallFor('N').end.y = value;
-    wallFor('E').start.y = value;
-    wallFor('W').end.y = value;
-    return;
-  }
-
-  wallFor('S').start.y = value;
-  wallFor('S').end.y = value;
-  wallFor('E').end.y = value;
-  wallFor('W').start.y = value;
 }
 
 function codes(plan: Floorplan, previous?: Floorplan): string[] {
@@ -319,21 +304,22 @@ describe('door swing rules', () => {
 
   it('reports a pair of clashing doors once, not once from each side', () => {
     const plan = clonePlan(sampleFloorplan);
-    // A second door sweeping the same corner of the hallway as kitchen-hall.
+    // A second door sweeping the same north-west corner of the hallway that
+    // living-hall opens into.
     plan.openings.push({
       id: 'hall-side',
-      wallId: 'hall-W',
+      wallId: 'hall-E',
       kind: 'door',
-      offset: 100,
+      offset: 0,
       width: 32,
       height: 80,
       sillHeight: 0,
       swing: 'in-left',
-      connects: ['bath', 'hall'],
+      connects: ['bed2', 'hall'],
     });
 
     const clashes = findAll(plan, 'DOOR_SWING_CLASH').filter((violation) => {
-      return violation.elementIds.includes('hall-side') && violation.elementIds.includes('kitchen-hall');
+      return violation.elementIds.includes('hall-side') && violation.elementIds.includes('living-hall');
     });
 
     expect(clashes).toHaveLength(1);
@@ -370,7 +356,7 @@ describe('structural rules', () => {
 
   it('ignores a trimmed partition wall and a small structural nudge', () => {
     const plan = clonePlan(sampleFloorplan);
-    const partition = plan.walls.find((item) => item.id === 'bath-N')!;
+    const partition = plan.walls.find((item) => item.id === 'living-S-2')!;
     partition.end = { x: partition.start.x + 12, y: partition.start.y };
 
     const structural = plan.walls.find((item) => item.id === 'living-N')!;

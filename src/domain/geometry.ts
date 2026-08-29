@@ -318,15 +318,46 @@ export function roomPolygon(plan: Floorplan, room: Room): Point[] {
   return points;
 }
 
+/**
+ * Area centroid, not the average of the corners. A room's walls are cut where
+ * its neighbours meet it, so its outline carries extra collinear vertices that
+ * are bunched along whichever side has the most neighbours -- averaging those
+ * pulls the "middle" of the room toward that side.
+ */
 export function polygonCentroid(points: Point[]): Point {
   if (points.length === 0) {
     return { x: 0, y: 0 };
   }
 
-  return {
+  const average = {
     x: points.reduce((sum, point) => sum + point.x, 0) / points.length,
     y: points.reduce((sum, point) => sum + point.y, 0) / points.length,
   };
+
+  if (points.length < 3) {
+    return average;
+  }
+
+  let twiceArea = 0;
+  let x = 0;
+  let y = 0;
+
+  for (let index = 0; index < points.length; index += 1) {
+    const current = points[index];
+    const next = points[(index + 1) % points.length];
+    const cross = current.x * next.y - next.x * current.y;
+
+    twiceArea += cross;
+    x += (current.x + next.x) * cross;
+    y += (current.y + next.y) * cross;
+  }
+
+  // A degenerate outline has no area to take a centroid of.
+  if (Math.abs(twiceArea) < 1e-9) {
+    return average;
+  }
+
+  return { x: x / (3 * twiceArea), y: y / (3 * twiceArea) };
 }
 
 export function polygonAreaSqIn(points: Point[]): number {

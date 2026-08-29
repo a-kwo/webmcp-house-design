@@ -129,9 +129,17 @@ export function moveWall(
   const to = from + offset[axis];
 
   const next = clone(plan);
-  const group = coincidentWalls(next, next.walls.find((wall) => wall.id === source.id)!);
-  const groupIds = new Set(group.map((wall) => wall.id));
-  const affected = next.rooms.filter((room) => room.wallIds.some((id) => groupIds.has(id)));
+
+  // A partition is one wall shared by the rooms on both sides, cut into
+  // segments where other rooms meet it. Sliding one segment would leave the
+  // rooms it borders L-shaped, so the whole line moves: every room with an edge
+  // on it, and every wall endpoint sitting on it.
+  const affected = next.rooms.filter((room) => {
+    const box = roomBox(next, room);
+    const low = axis === 'x' ? box.minX : box.minY;
+    const high = axis === 'x' ? box.maxX : box.maxY;
+    return Math.abs(low - from) < 0.001 || Math.abs(high - from) < 0.001;
+  });
 
   // Reject before mutating anything if the move would collapse a room.
   for (const room of affected) {
@@ -148,15 +156,73 @@ export function moveWall(
     }
   }
 
-  for (const room of affected) {
-    setRoomEdge(next, room, axis, from, to);
+  const before = new Map(
+    next.walls.map((wall) => [wall.id, { dx: wall.end.x - wall.start.x, dy: wall.end.y - wall.start.y }]),
+  );
+
+  const moved: string[] = [];
+  for (const wall of next.walls) {
+    let touched = false;
+    for (const endpoint of [wall.start, wall.end]) {
+      if (Math.abs(endpoint[axis] - from) < 0.001) {
+        endpoint[axis] = to;
+        touched = true;
+      }
+    }
+    if (touched) {
+      moved.push(wall.id);
+    }
+  }
+
+  // A wall that another room meets part-way along has been cut there. Dragging
+  // the line past that junction pulls the far segment back through its own
+  // start, leaving it inside out and overlapping its neighbour. Re-cutting the
+  // line to suit would be the thorough answer; refusing is the honest one.
+  for (const wall of next.walls) {
+    const was = before.get(wall.id);
+    if (!was) {
+      continue;
+    }
+
+    const dx = wall.end.x - wall.start.x;
+    const dy = wall.end.y - wall.start.y;
+
+    if (Math.hypot(dx, dy) < 0.001) {
+      return fail(
+        `Moving ${source.id} ${distance}in ${input.direction} would shrink ${wall.id} to nothing. Use a smaller distance.`,
+      );
+    }
+
+    if (was.dx * dx + was.dy * dy < 0) {
+      return fail(
+        `Moving ${source.id} ${distance}in ${input.direction} would drag the line past where ${wall.id} meets it, folding that wall back on itself. Use a smaller distance.`,
+      );
+    }
+  }
+
+  // Walls meeting the line get shorter as it moves, and one of them may be
+  // carrying a door. Nothing downstream can represent an opening hanging off
+  // the end of its wall, so refuse rather than leave the plan incoherent.
+  // (`distance` is the snapped move above, so measure with hypot here.)
+  for (const opening of next.openings) {
+    const wall = next.walls.find((candidate) => candidate.id === opening.wallId);
+    if (!wall) {
+      continue;
+    }
+
+    const length = Math.hypot(wall.end.x - wall.start.x, wall.end.y - wall.start.y);
+    if (opening.offset + opening.width > length + 0.001) {
+      return fail(
+        `Moving ${source.id} ${distance}in ${input.direction} would shorten ${wall.id} to ${Math.round(length)}in, leaving ${opening.id} hanging off the end of it. Move or remove ${opening.id} first, or use a smaller distance.`,
+      );
+    }
   }
 
   const names = affected.map((room) => room.name);
   return {
     ok: true,
     plan: next,
-    changed: [...groupIds, ...affected.map((room) => room.id)],
+    changed: [...moved, ...affected.map((room) => room.id)],
     summary: `Moved ${source.id} ${distance}in ${input.direction}, resizing ${names.join(' and ')}.`,
   };
 }
@@ -458,21 +524,19 @@ export function removeElement(plan: Floorplan, elementId: string): OperationResu
       );
     }
 
-    const next = clone(plan);
-    const droppedOpenings = next.openings.filter((opening) => opening.wallId === wall.id).map((opening) => opening.id);
+    // Every wall is part of some room's outline: a partition is the boundary
+    // for the rooms on both sides of it. Taking it away leaves them open shapes
+    // with no area, so there is no coherent plan on the other side of this.
+    // Merging the two rooms would be the useful thing, but the result is
+    // L-shaped and rooms are rectangles everywhere else here.
+    const between = plan.rooms.filter((room) => room.wallIds.includes(wall.id));
+    const names = between.map((room) => room.name).join(' and ');
 
-    next.walls = next.walls.filter((candidate) => candidate.id !== wall.id);
-    next.openings = next.openings.filter((opening) => opening.wallId !== wall.id);
-    next.rooms = next.rooms.map((room) => ({ ...room, wallIds: room.wallIds.filter((id) => id !== wall.id) }));
-
-    return {
-      ok: true,
-      plan: next,
-      changed: [wall.id, ...droppedOpenings],
-      summary: droppedOpenings.length > 0
-        ? `Removed wall ${wall.id} and the ${droppedOpenings.length} opening(s) it carried.`
-        : `Removed wall ${wall.id}.`,
-    };
+    return fail(
+      between.length > 1
+        ? `Wall ${wall.id} separates ${names}; removing it would leave both without an outline. Use add_opening to pass through it, or remove one of the rooms outright.`
+        : `Wall ${wall.id} is part of ${names || 'the plan'}'s outline; removing it would leave the room open. Use add_opening to pass through it, or remove the room outright.`,
+    );
   }
 
   const opening = plan.openings.find((candidate) => candidate.id === elementId);
@@ -514,6 +578,150 @@ export function removeElement(plan: Floorplan, elementId: string): OperationResu
   return fail(`No element with id "${elementId}". Call get_layout to list the ids currently in the plan.`);
 }
 
+/** Where a wall sits along its own line: the axis it varies on, and its span. */
+function wallSpan(wall: Wall): { axis: 'x' | 'y'; coord: number; from: number; to: number } {
+  const vertical = isVertical(wall);
+  const axis: 'x' | 'y' = vertical ? 'y' : 'x';
+  const coord = vertical ? wall.start.x : wall.start.y;
+  const a = wall.start[axis];
+  const b = wall.end[axis];
+
+  return { axis, coord, from: Math.min(a, b), to: Math.max(a, b) };
+}
+
+/**
+ * Cuts `wall` in two at `at` inches along it, so a room meeting only part of a
+ * wall can share exactly the part it touches instead of drawing its own copy.
+ *
+ * Both rooms already referencing the wall pick up both halves, and openings
+ * past the cut move to the far half with their offsets rebased. An opening
+ * straddling the cut has nowhere to go, so the split is refused rather than
+ * silently dropping it.
+ */
+function splitWall(plan: Floorplan, wall: Wall, at: number): OperationResult | string {
+  const span = wallSpan(wall);
+  const length = span.to - span.from;
+
+  if (at <= 0.001 || at >= length - 0.001) {
+    return wall.id;
+  }
+
+  const straddling = plan.openings.find((opening) => {
+    return opening.wallId === wall.id && opening.offset < at - 0.001 && opening.offset + opening.width > at + 0.001;
+  });
+
+  if (straddling) {
+    return fail(
+      `Splitting ${wall.id} at ${Math.round(at)}in would cut through ${straddling.id}. Line the new room up with the opening, or remove ${straddling.id} first.`,
+    );
+  }
+
+  const forward = wall.start[span.axis] <= wall.end[span.axis];
+  const cutCoord = forward ? span.from + at : span.to - at;
+  const point: Point = span.axis === 'y'
+    ? { x: span.coord, y: cutCoord }
+    : { x: cutCoord, y: span.coord };
+
+  const secondId = uniqueId(plan, `${wall.id}-2`);
+  plan.walls.push({ ...wall, id: secondId, start: { ...point }, end: { ...wall.end } });
+  wall.end = { ...point };
+
+  for (const room of plan.rooms) {
+    if (room.wallIds.includes(wall.id)) {
+      room.wallIds.push(secondId);
+    }
+  }
+
+  for (const opening of plan.openings) {
+    if (opening.wallId === wall.id && opening.offset >= at - 0.001) {
+      opening.wallId = secondId;
+      opening.offset -= at;
+    }
+  }
+
+  return secondId;
+}
+
+/**
+ * The walls covering one edge of a new room, splitting and reusing whatever is
+ * already on that line so the edge shares a single wall with each neighbour it
+ * meets, and adding walls only where nothing stands yet.
+ */
+function claimEdge(
+  plan: Floorplan,
+  roomId: string,
+  side: 'N' | 'E' | 'S' | 'W',
+  edge: { start: Point; end: Point },
+): { ok: true; wallIds: string[]; shared: string[] } | { ok: false; error: string } {
+  const probe: Wall = { id: '', start: edge.start, end: edge.end, thickness: 5, exterior: false, loadBearing: false, wet: false };
+  const want = wallSpan(probe);
+
+  const onLine = () =>
+    plan.walls.filter((candidate) => {
+      const candidateSpan = wallSpan(candidate);
+      return (
+        candidateSpan.axis === want.axis &&
+        Math.abs(candidateSpan.coord - want.coord) < 0.001 &&
+        Math.min(candidateSpan.to, want.to) - Math.max(candidateSpan.from, want.from) > 0.001
+      );
+    });
+
+  // Cut the neighbours back to this edge's ends before claiming anything.
+  for (const cut of [want.from, want.to]) {
+    for (const candidate of onLine()) {
+      const candidateSpan = wallSpan(candidate);
+      if (cut <= candidateSpan.from + 0.001 || cut >= candidateSpan.to - 0.001) {
+        continue;
+      }
+
+      const forward = candidate.start[candidateSpan.axis] <= candidate.end[candidateSpan.axis];
+      const along = forward ? cut - candidateSpan.from : candidateSpan.to - cut;
+      const result = splitWall(plan, candidate, along);
+
+      if (typeof result !== 'string') {
+        return { ok: false, error: result.ok ? 'unreachable' : result.error };
+      }
+    }
+  }
+
+  const shared = onLine()
+    .filter((candidate) => {
+      const candidateSpan = wallSpan(candidate);
+      return candidateSpan.from >= want.from - 0.001 && candidateSpan.to <= want.to + 0.001;
+    })
+    .sort((a, b) => wallSpan(a).from - wallSpan(b).from);
+
+  const wallIds: string[] = [];
+  let cursor = want.from;
+
+  const addGap = (from: number, to: number) => {
+    if (to - from <= 0.001) {
+      return;
+    }
+    const id = uniqueId(plan, `${roomId}-${side}`);
+    plan.walls.push({
+      id,
+      start: want.axis === 'y' ? { x: want.coord, y: from } : { x: from, y: want.coord },
+      end: want.axis === 'y' ? { x: want.coord, y: to } : { x: to, y: want.coord },
+      thickness: 5,
+      exterior: false,
+      loadBearing: false,
+      wet: false,
+    });
+    wallIds.push(id);
+  };
+
+  for (const candidate of shared) {
+    const candidateSpan = wallSpan(candidate);
+    addGap(cursor, candidateSpan.from);
+    wallIds.push(candidate.id);
+    cursor = candidateSpan.to;
+  }
+  addGap(cursor, want.to);
+
+  return { ok: true, wallIds, shared: shared.map((candidate) => candidate.id) };
+}
+
 export function addRoom(
   plan: Floorplan,
   input: {
@@ -535,7 +743,6 @@ export function addRoom(
   const roomId = uniqueId(next, input.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'room');
 
   let origin: Point;
-  let sharedWall: Wall | undefined;
 
   if (input.attachTo) {
     const anchor = next.rooms.find((candidate) => candidate.id === input.attachTo!.roomId);
@@ -544,30 +751,37 @@ export function addRoom(
     }
 
     const box = roomBox(next, anchor);
-    const side = input.attachTo.side;
-
     origin = {
       north: { x: box.minX, y: box.minY - depth },
       south: { x: box.minX, y: box.maxY },
       east: { x: box.maxX, y: box.minY },
       west: { x: box.minX - width, y: box.minY },
-    }[side];
-
-    // Reuse the anchor's wall on that side so the two rooms share one partition.
-    const axis: 'x' | 'y' = side === 'east' || side === 'west' ? 'x' : 'y';
-    const edge = { north: box.minY, south: box.maxY, east: box.maxX, west: box.minX }[side];
-
-    sharedWall = next.walls.find((candidate) => {
-      if (!anchor.wallIds.includes(candidate.id)) {
-        return false;
-      }
-      const aligned = axis === 'x' ? isVertical(candidate) : isHorizontal(candidate);
-      return aligned && Math.abs(candidate.start[axis] - edge) < 0.001;
-    });
+    }[input.attachTo.side];
   } else {
     const occupied = next.rooms.flatMap((room) => roomPolygon(next, room));
     const bounds = occupied.length > 0 ? boundingBox(occupied) : { minX: 0, minY: 0, maxX: 0, maxY: 0 };
     origin = { x: bounds.maxX, y: bounds.minY };
+  }
+
+  // Attaching to a side says where to start, not that anything is free there:
+  // south of the kitchen is the hallway and a bedroom. Dropping a room on top
+  // of them leaves walls claimed by three rooms and rooms inside other rooms.
+  const footprint = { minX: origin.x, minY: origin.y, maxX: origin.x + width, maxY: origin.y + depth };
+  const blocking = next.rooms.filter((room) => {
+    const other = roomBox(next, room);
+    return (
+      footprint.minX < other.maxX - 0.001 &&
+      other.minX < footprint.maxX - 0.001 &&
+      footprint.minY < other.maxY - 0.001 &&
+      other.minY < footprint.maxY - 0.001
+    );
+  });
+
+  if (blocking.length > 0) {
+    const names = blocking.map((room) => room.name).join(' and ');
+    return fail(
+      `A ${width}x${depth}in room there would overlap ${names}. Attach it to a side with space free, or make it smaller.`,
+    );
   }
 
   const corners = {
@@ -585,31 +799,32 @@ export function addRoom(
   ];
 
   const wallIds: string[] = [];
-  let reusedWallId: string | undefined;
+  const shared: string[] = [];
 
   for (const edge of edges) {
-    // Reference the existing partition only when the two rooms line up exactly;
-    // a shorter room abuts the same line but needs its own wall segment.
-    if (sharedWall && samePointPair(edge, sharedWall)) {
-      wallIds.push(sharedWall.id);
-      reusedWallId = sharedWall.id;
-      continue;
+    const claimed = claimEdge(next, roomId, edge.side, edge);
+    if (!claimed.ok) {
+      return fail(claimed.error);
     }
 
-    const id = uniqueId(next, `${roomId}-${edge.side}`);
-    next.walls.push({
-      id,
-      start: edge.start,
-      end: edge.end,
-      thickness: 5,
-      exterior: false,
-      loadBearing: false,
-      wet: false,
-    });
-    wallIds.push(id);
+    wallIds.push(...claimed.wallIds);
+    shared.push(...claimed.shared);
   }
 
   next.rooms.push({ id: roomId, name: input.name, type: input.type, wallIds });
+
+  // A wall with rooms on both sides is not the outside of the building any
+  // more. Left flagged exterior it would keep telling add_opening that a door
+  // through it reaches the outside, and satisfy bedroom egress for free. It
+  // stays load-bearing: it still carries whatever it carried.
+  for (const id of shared) {
+    const wall = next.walls.find((candidate) => candidate.id === id);
+    const between = next.rooms.filter((room) => room.wallIds.includes(id));
+
+    if (wall && wall.exterior && between.length > 1) {
+      wall.exterior = false;
+    }
+  }
 
   return {
     ok: true,
@@ -617,9 +832,9 @@ export function addRoom(
     changed: [roomId, ...wallIds],
     summary: input.attachTo
       ? `Added ${input.name} (${width}x${depth}in) on the ${input.attachTo.side} side of ${input.attachTo.roomId}${
-          reusedWallId
-            ? `, sharing wall ${reusedWallId}`
-            : ', with its own wall on that side because the two rooms are different lengths'
+          shared.length > 0
+            ? `, sharing ${shared.length === 1 ? 'wall' : 'walls'} ${shared.join(', ')}`
+            : ', with its own walls'
         }.`
       : `Added ${input.name} (${width}x${depth}in).`,
   };

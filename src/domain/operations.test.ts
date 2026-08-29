@@ -77,6 +77,29 @@ describe('moveWall', () => {
     expect(result.ok).toBe(true);
   });
 
+  it('refuses to drag a line past a wall that was cut to meet it', () => {
+    // A room attached south of the hallway runs to x = 372, cutting bed2's
+    // south wall there. Pulling bed2's east edge in to x = 354 would drag the
+    // 372-384 offcut back through its own start.
+    const withRoom = expectOk(addRoom(sampleFloorplan, {
+      name: 'Utility', type: 'utility', widthIn: 156, depthIn: 72,
+      attachTo: { roomId: 'hall', side: 'south' },
+    }));
+
+    const error = expectFail(resizeRoom(withRoom.plan, { roomId: 'bed2', widthIn: 96 }));
+
+    expect(error).toContain('folding that wall back on itself');
+  });
+
+  it('refuses a move that would leave a door hanging off a shortened wall', () => {
+    // Pulling y = 180 north shortens living-E-2, the living/hallway wall, from
+    // 36in to 24in -- but the living-hall door needs 34in of it.
+    const error = expectFail(moveWall(sampleFloorplan, { wallId: 'living-S', distanceIn: 12, direction: 'north' }));
+
+    expect(error).toContain('living-hall');
+    expect(error).toContain('hanging off the end');
+  });
+
   it('supports the demo interaction: widen a room and hear what it cost', () => {
     const result = expectOk(moveWall(sampleFloorplan, { wallId: 'living-E', distanceIn: 12, direction: 'east' }));
     const violations = validate(result.plan, sampleFloorplan);
@@ -113,46 +136,44 @@ describe('resizeRoom', () => {
 
 describe('addOpening', () => {
   it('adds a door and infers the rooms it connects', () => {
-    const result = expectOk(addOpening(sampleFloorplan, { wallId: 'bed1-N', kind: 'door', offsetIn: 12, widthIn: 36 }));
+    const result = expectOk(addOpening(sampleFloorplan, { wallId: 'living-S', kind: 'door', offsetIn: 12, widthIn: 36 }));
     const opening = result.plan.openings.find((candidate) => candidate.id === result.changed[0])!;
 
-    expect(opening.connects).toEqual(['bed1', 'living']);
+    expect(opening.connects).toEqual(['living', 'bed1']);
     expect(opening.width).toBe(36);
     expect(opening.height).toBe(80);
   });
 
-  it('names the room across a partition rather than the exterior', () => {
-    // bed1-E and bath-W are one physical wall drawn twice, once per room, so
-    // the far room is only reachable through the coincident copy.
+  it('names both rooms a partition separates, never the exterior', () => {
     const result = expectOk(addOpening(sampleFloorplan, { wallId: 'bed1-E', kind: 'door', offsetIn: 12, widthIn: 32 }));
     const opening = result.plan.openings.find((candidate) => candidate.id === result.changed[0])!;
 
     expect(opening.connects).toEqual(['bed1', 'bath']);
   });
 
-  it('picks the room facing the opening when a wall runs past several', () => {
-    // living-E spans y 0-180: the kitchen sits against its northern half and
-    // the hallway against its southern, so the offset decides the answer.
-    const north = expectOk(addOpening(sampleFloorplan, { wallId: 'living-E', kind: 'door', offsetIn: 12, widthIn: 36 }));
-    const south = expectOk(addOpening(sampleFloorplan, { wallId: 'living-E', kind: 'door', offsetIn: 144, widthIn: 30 }));
-
-    const northDoor = north.plan.openings.find((candidate) => candidate.id === north.changed[0])!;
-    const southDoor = south.plan.openings.find((candidate) => candidate.id === south.changed[0])!;
-
-    expect(northDoor.connects).toEqual(['living', 'kitchen']);
-    expect(southDoor.connects).toEqual(['living', 'hall']);
+  it('has no wall that runs past a room it does not border', () => {
+    // Edges are cut where rooms meet, so which rooms a wall separates never
+    // depends on where along it you look. x = 216 is three separate walls.
+    for (const wall of sampleFloorplan.walls) {
+      const touching = sampleFloorplan.rooms.filter((room) => room.wallIds.includes(wall.id));
+      expect(touching.length).toBeLessThanOrEqual(2);
+      expect(touching.length).toBeGreaterThan(0);
+      if (!wall.exterior) {
+        expect(touching).toHaveLength(2);
+      }
+    }
   });
 
   it('does not let an interior door satisfy bedroom egress', () => {
     const plan = JSON.parse(JSON.stringify(sampleFloorplan)) as Floorplan;
     plan.openings = plan.openings.filter((opening) => opening.id !== 'bed2-window');
 
-    // bed2-W is interior; a door there reaches the hallway, not the outside.
-    const result = expectOk(addOpening(plan, { wallId: 'bed2-W', kind: 'door', offsetIn: 12, widthIn: 32 }));
+    // hall-E is the hall/bed2 partition; a door there reaches the hallway.
+    const result = expectOk(addOpening(plan, { wallId: 'hall-E', kind: 'door', offsetIn: 12, widthIn: 32 }));
 
     const door = result.plan.openings.find((candidate) => candidate.id === result.changed[0])!;
 
-    expect(door.connects).toEqual(['bed2', 'hall']);
+    expect(door.connects).toEqual(['hall', 'bed2']);
     expect(validate(result.plan).some((violation) => violation.code === 'BEDROOM_EGRESS')).toBe(true);
   });
 
@@ -165,7 +186,7 @@ describe('addOpening', () => {
   });
 
   it('rejects an opening that runs off the end of the wall', () => {
-    const error = expectFail(addOpening(sampleFloorplan, { wallId: 'bed1-N', kind: 'door', offsetIn: 120, widthIn: 36 }));
+    const error = expectFail(addOpening(sampleFloorplan, { wallId: 'living-S', kind: 'door', offsetIn: 120, widthIn: 36 }));
     expect(error).toContain('does not fit');
     expect(error).toMatch(/offset between 0 and \d+in/);
   });
@@ -180,23 +201,22 @@ describe('addOpening', () => {
   });
 
   it('refuses an opening that lands on one already there', () => {
-    // living-bed1 runs 48-80in along bed1-N.
-    const error = expectFail(addOpening(sampleFloorplan, { wallId: 'bed1-N', kind: 'door', offsetIn: 60, widthIn: 32 }));
+    // living-bed1 runs 48-80in along living-S.
+    const error = expectFail(addOpening(sampleFloorplan, { wallId: 'living-S', kind: 'door', offsetIn: 60, widthIn: 32 }));
 
     expect(error).toContain('would overlap living-bed1');
     expect(error).toMatch(/48in to 80in/);
   });
 
-  it('sees an opening through the neighbour copy of the same partition', () => {
-    // hall-bed2 is recorded against bed2-W; hall-E is the hallway's copy of that
-    // wall, so the doorway is physically in the way from that side too.
+  it('reports the overlap in the offsets of the wall being cut', () => {
     const error = expectFail(addOpening(sampleFloorplan, { wallId: 'hall-E', kind: 'door', offsetIn: 84, widthIn: 30 }));
 
     expect(error).toContain('would overlap hall-bed2');
+    expect(error).toMatch(/76in to 108in/);
   });
 
   it('allows an opening that only touches the edge of another', () => {
-    const result = expectOk(addOpening(sampleFloorplan, { wallId: 'bed1-N', kind: 'door', offsetIn: 12, widthIn: 36 }));
+    const result = expectOk(addOpening(sampleFloorplan, { wallId: 'living-S', kind: 'door', offsetIn: 12, widthIn: 36 }));
 
     expect(result.plan.openings).toHaveLength(sampleFloorplan.openings.length + 1);
   });
@@ -271,12 +291,11 @@ describe('placeFurniture', () => {
 });
 
 describe('removeElement', () => {
-  it('removes a partition wall and cascades to its openings', () => {
-    const result = expectOk(removeElement(sampleFloorplan, 'bath-E'));
+  it('refuses to remove a partition and names both rooms it would open up', () => {
+    const error = expectFail(removeElement(sampleFloorplan, 'hall-W'));
 
-    expect(result.plan.walls.some((wall) => wall.id === 'bath-E')).toBe(false);
-    expect(result.plan.openings.some((opening) => opening.id === 'hall-bath')).toBe(false);
-    expect(result.changed).toContain('hall-bath');
+    expect(error).toContain('separates Hallway and Bathroom');
+    expect(error).toContain('add_opening');
   });
 
   it('refuses to remove a structural wall and names the alternative', () => {
@@ -323,7 +342,10 @@ describe('addRoom', () => {
     expect(result.plan.walls).toHaveLength(sampleFloorplan.walls.length + 3);
   });
 
-  it('gives a shorter attached room its own wall and says so', () => {
+  it('splits the wall a shorter attached room only partly meets', () => {
+    // Office is 96in wide against Bedroom 1's 132in south wall, so that wall is
+    // cut in two and the rooms share exactly the 96in they have in common
+    // rather than each drawing its own copy of the overlap.
     const result = expectOk(addRoom(sampleFloorplan, {
       name: 'Office',
       type: 'utility',
@@ -334,9 +356,29 @@ describe('addRoom', () => {
 
     const office = result.plan.rooms.find((room) => room.name === 'Office')!;
     const bed1 = result.plan.rooms.find((room) => room.id === 'bed1')!;
+    const common = office.wallIds.filter((id) => bed1.wallIds.includes(id));
 
-    expect(office.wallIds.filter((id) => bed1.wallIds.includes(id))).toEqual([]);
-    expect(result.summary).toContain('different lengths');
+    expect(common).toHaveLength(1);
+    expect(result.summary).toContain('sharing wall');
+
+    const shared = result.plan.walls.find((wall) => wall.id === common[0])!;
+    expect(Math.hypot(shared.end.x - shared.start.x, shared.end.y - shared.start.y)).toBeCloseTo(96);
+
+    // Bedroom 1 keeps its full 132in width: the leftover 36in is still its wall.
+    expect(roomDimensions(result.plan, bed1).width).toBeCloseTo(132);
+  });
+
+  it('leaves every partition referenced by exactly the rooms it separates', () => {
+    const result = expectOk(addRoom(sampleFloorplan, {
+      name: 'Office', type: 'utility', widthIn: 96, depthIn: 120,
+      attachTo: { roomId: 'bed1', side: 'south' },
+    }));
+
+    for (const wall of result.plan.walls) {
+      const touching = result.plan.rooms.filter((room) => room.wallIds.includes(wall.id));
+      expect(touching.length).toBeGreaterThan(0);
+      expect(touching.length).toBeLessThanOrEqual(2);
+    }
   });
 
   it('computes a correct area for a room built on a shared wall', () => {
@@ -356,6 +398,53 @@ describe('addRoom', () => {
   it('adds a standalone room when nothing is attached', () => {
     const result = expectOk(addRoom(sampleFloorplan, { name: 'Shed', type: 'utility', widthIn: 96, depthIn: 96 }));
     expect(areaOf(result.plan, 'shed')).toBeCloseTo(64, 0);
+  });
+
+  it('refuses to drop a room on top of the ones already there', () => {
+    // South of the kitchen is the hallway and Bedroom 2, not free space.
+    const error = expectFail(addRoom(sampleFloorplan, {
+      name: 'Pantry', type: 'utility', widthIn: 72, depthIn: 72,
+      attachTo: { roomId: 'kitchen', side: 'south' },
+    }));
+
+    expect(error).toContain('would overlap');
+    expect(error).toContain('Hallway');
+  });
+
+  it('still attaches where the space really is free', () => {
+    const result = expectOk(addRoom(sampleFloorplan, {
+      name: 'Porch', type: 'utility', widthIn: 216, depthIn: 72,
+      attachTo: { roomId: 'living', side: 'north' },
+    }));
+
+    expect(result.plan.rooms).toHaveLength(sampleFloorplan.rooms.length + 1);
+    expect(result.summary).toContain('sharing wall living-N');
+  });
+
+  it('stops calling a wall exterior once a room is built against it', () => {
+    // living-N was the outside of the building. With a room on both sides it is
+    // a partition, and a door through it no longer reaches the outside.
+    const result = expectOk(addRoom(sampleFloorplan, {
+      name: 'Porch', type: 'utility', widthIn: 216, depthIn: 72,
+      attachTo: { roomId: 'living', side: 'north' },
+    }));
+
+    const wall = result.plan.walls.find((candidate) => candidate.id === 'living-N')!;
+    expect(wall.exterior).toBe(false);
+    expect(wall.loadBearing).toBe(true);
+
+    const opened = expectOk(addOpening(result.plan, { wallId: 'living-N', kind: 'door', offsetIn: 12, widthIn: 32 }));
+    const door = opened.plan.openings.find((o) => o.id === opened.changed[0])!;
+    expect(door.connects).not.toContain('EXTERIOR');
+  });
+
+  it('refuses to split a wall where the cut would land on an opening', () => {
+    const error = expectFail(addRoom(sampleFloorplan, {
+      name: 'Porch', type: 'utility', widthIn: 72, depthIn: 72,
+      attachTo: { roomId: 'bed2', side: 'east' },
+    }));
+
+    expect(error).toContain('would cut through bed2-window');
   });
 
   it('rejects a room that is too small to use', () => {

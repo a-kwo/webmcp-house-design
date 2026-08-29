@@ -53,14 +53,14 @@ describe('wallPlacement', () => {
     expect(along.z).toBeCloseTo(1);
   });
 
-  it('follows a wall drawn backwards rather than its neighbour', () => {
-    // bath-W is the same physical wall as bed1-E, drawn in reverse.
-    const forward = wallPlacement(wall('bed1-E'));
-    const backward = wallPlacement(wall('bath-W'));
-
-    expect(alongAxis(forward.rotationY).z).toBeCloseTo(1);
-    expect(alongAxis(backward.rotationY).z).toBeCloseTo(-1);
-    expect(backward.position).toEqual([132, 0, 300]);
+  it('runs every wall the same way, west to east and north to south', () => {
+    // One wall per partition means no second copy pointing the other way, so an
+    // offset along a wall means the same thing to both rooms sharing it.
+    for (const candidate of sampleFloorplan.walls) {
+      const along = alongAxis(wallPlacement(candidate).rotationY);
+      expect(along.x).toBeGreaterThanOrEqual(-0.001);
+      expect(along.z).toBeGreaterThanOrEqual(-0.001);
+    }
   });
 });
 
@@ -110,27 +110,15 @@ describe('wallPanelRects', () => {
   });
 });
 
-describe('shared partitions', () => {
-  it('cuts a doorway into both rooms\' copies of the same wall', () => {
-    // hall-bed2 is recorded against bed2-W. hall-E is the same physical wall,
-    // drawn by the hallway in the opposite direction, and must open too --
-    // otherwise the neighbour's copy bricks up the doorway.
-    const owner = wallPanelRects(sampleFloorplan, wall('bed2-W'), 96).holes;
-    const neighbour = wallPanelRects(sampleFloorplan, wall('hall-E'), 96).holes;
+describe('one wall per partition', () => {
+  it('cuts a doorway once, into the wall both rooms reference', () => {
+    const shared = wall('hall-E');
+    const holes = wallPanelRects(sampleFloorplan, shared, 96).holes;
 
-    expect(owner.map((hole) => hole.openingId)).toContain('hall-bed2');
-    expect(neighbour.map((hole) => hole.openingId)).toContain('hall-bed2');
-  });
+    expect(holes.map((hole) => hole.openingId)).toEqual(['hall-bed2']);
 
-  it('maps the offset through the reversed wall rather than copying it', () => {
-    const [owner] = wallPanelRects(sampleFloorplan, wall('bed2-W'), 96).holes;
-    const [neighbour] = wallPanelRects(sampleFloorplan, wall('hall-E'), 96).holes;
-
-    // Both walls span y 144-300; the door sits 48in from bed2-W's start at
-    // y = 300, so it is 156 - 80 = 76in from hall-E's start at y = 144.
-    expect(owner.x).toBeCloseTo(48, 1);
-    expect(neighbour.x).toBeCloseTo(76, 1);
-    expect(owner.w).toBeCloseTo(neighbour.w, 1);
+    const rooms = sampleFloorplan.rooms.filter((room) => room.wallIds.includes('hall-E'));
+    expect(rooms.map((room) => room.id).sort()).toEqual(['bed2', 'hall']);
   });
 
   it('always cuts an opening into the wall that records it', () => {
@@ -142,22 +130,8 @@ describe('shared partitions', () => {
     }
   });
 
-  it('opens only the coincident walls that actually span the opening', () => {
-    // living-E carries the living-kitchen archway at y 48-108. kitchen-W is
-    // coincident there and has to open too. hall-W shares the same x = 216 line
-    // and overlaps living-E further south, but never reaches the archway, so it
-    // stays solid -- coincidence alone is not enough.
-    const kitchenSide = wallPanelRects(sampleFloorplan, wall('kitchen-W'), 96).holes;
-    const hallSide = wallPanelRects(sampleFloorplan, wall('hall-W'), 96).holes;
-
-    expect(kitchenSide.map((hole) => hole.openingId)).toContain('living-kitchen');
-    expect(hallSide.map((hole) => hole.openingId)).not.toContain('living-kitchen');
-  });
-
   it('leaves a wall on another line untouched', () => {
-    const holes = wallPanelRects(sampleFloorplan, wall('bed1-S'), 96).holes;
-
-    expect(holes).toHaveLength(0);
+    expect(wallPanelRects(sampleFloorplan, wall('bed1-S'), 96).holes).toHaveLength(0);
   });
 });
 
@@ -183,10 +157,10 @@ describe('changedWalls', () => {
     const variant = expectOk(moveWall(sampleFloorplan, { wallId: 'living-E', distanceIn: 24, direction: 'east' }));
     const moved = changedWalls(sampleFloorplan, variant.plan).map((wall) => wall.id).sort();
 
-    // living-E and the copies of it the kitchen and hallway draw all move.
+    // The whole x = 216 line slides, along with every wall ending on it.
     expect(moved).toContain('living-E');
-    expect(moved).toContain('kitchen-W');
-    expect(moved.length).toBeGreaterThan(0);
+    expect(moved).toContain('living-E-2');
+    expect(moved).toContain('hall-W');
     expect(moved.length).toBeLessThan(sampleFloorplan.walls.length);
   });
 
@@ -212,10 +186,9 @@ describe('proposedWalls', () => {
     const proposed = proposedWalls(sampleFloorplan, variant.plan).map((wall) => wall.id).sort();
     const changed = changedWalls(sampleFloorplan, variant.plan).map((wall) => wall.id).sort();
 
-    // hall-E and the copy bed2 draws of it both move to x = 270. The four walls
-    // meeting them only change length, and two of those sit on the plan's south
-    // edge, right in front of the iso camera.
-    expect(proposed).toEqual(['bed2-W', 'hall-E']);
+    // hall-E moves to x = 270. The walls meeting it only change length, and two
+    // of those sit on the plan's south edge, right in front of the iso camera.
+    expect(proposed).toEqual(['hall-E']);
     expect(changed).toContain('hall-S');
     expect(proposed).not.toContain('hall-S');
     expect(proposed).not.toContain('bed2-S');
