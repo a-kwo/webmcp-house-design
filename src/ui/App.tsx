@@ -9,6 +9,9 @@ export function App() {
   const plan = useFloorplanStore((state) => state.plan);
   const selection = useFloorplanStore((state) => state.selection);
   const select = useFloorplanStore((state) => state.select);
+  const undo = useFloorplanStore((state) => state.undo);
+  const reset = useFloorplanStore((state) => state.reset);
+  const undoDepth = useFloorplanStore((state) => state.undoStack.length);
   const [toolsReady, setToolsReady] = useState(false);
 
   useEffect(() => {
@@ -105,6 +108,20 @@ export function App() {
               ))}
             </ul>
           )}
+        </section>
+        <section>
+          <h2>History</h2>
+          <div className="history-actions">
+            <button type="button" onClick={() => undo()} disabled={undoDepth === 0}>
+              Undo
+            </button>
+            <button type="button" onClick={() => reset()} disabled={undoDepth === 0}>
+              Reset
+            </button>
+            <code>
+              {undoDepth === 0 ? 'original plan' : `${undoDepth} step${undoDepth === 1 ? '' : 's'}`}
+            </code>
+          </div>
         </section>
         <section>
           <h2>Agent tools</h2>
