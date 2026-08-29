@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { zodToJsonSchema } from 'zod-to-json-schema';
-import { computeRoomSummaries, roomDimensions, roomPolygon, boundingBox } from '../domain/geometry';
+import { boundingBox, coincidentWalls, computeRoomSummaries, roomDimensions, roomPolygon } from '../domain/geometry';
 import { addOpening, addRoom, moveWall, placeFurniture, removeElement, resizeRoom } from '../domain/operations';
 import type { Floorplan } from '../domain/types';
 import { validate } from '../domain/validate';
@@ -176,7 +176,12 @@ function describeSelection(state: FloorplanState) {
   const details = selection.elementIds.map((id) => {
     const wall = plan.walls.find((candidate) => candidate.id === id);
     if (wall) {
-      const rooms = plan.rooms.filter((room) => room.wallIds.includes(id));
+      // Each room draws its own copy of a shared partition, so the rooms a wall
+      // separates are spread across the coincident group. Listing only its own
+      // owner tells the agent a partition borders one room, and a wall move it
+      // then makes silently resizes a room it was never told about.
+      const partition = new Set(coincidentWalls(plan, wall).map((candidate) => candidate.id));
+      const rooms = plan.rooms.filter((room) => room.wallIds.some((wallId) => partition.has(wallId)));
       return {
         id,
         kind: 'wall' as const,

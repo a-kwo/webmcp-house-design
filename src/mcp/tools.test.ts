@@ -121,6 +121,16 @@ describe('read tools', () => {
     expect(selection.elements[0].bordersRooms).toContain('Living Room');
   });
 
+  it('names both rooms a shared partition separates', async () => {
+    const { call } = await setup();
+
+    // hall-E is one wall referenced by both rooms, so the agent has to be told
+    // that moving it resizes the hallway as well as Bedroom 2.
+    floorplanStore.getState().select(['hall-E']);
+
+    expect(call('get_selection').elements[0].bordersRooms.sort()).toEqual(['Bedroom 2', 'Hallway']);
+  });
+
   it('computes areas and a total', async () => {
     const { call } = await setup();
     const result = call('compute_areas', { roomIds: ['living', 'kitchen'] });
