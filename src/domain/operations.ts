@@ -2,6 +2,8 @@ import {
   boundingBox,
   coincidentWalls,
   distance,
+  furniturePolygon,
+  openingsOnWall,
   roomPolygon,
   samePoint,
   snapToGrid,
@@ -22,6 +24,8 @@ const MIN_ROOM_DIMENSION_IN = 24;
 // violation must still succeed and be reported by validate().
 const MIN_VIABLE_SPAN_IN = 6;
 const WALL_AGAINST_CLEARANCE_IN = 2;
+// Float slack, so a piece parked flush against a wall is not called outside it.
+const FIT_TOLERANCE_IN = 0.001;
 
 function clone(plan: Floorplan): Floorplan {
   return JSON.parse(JSON.stringify(plan)) as Floorplan;
@@ -296,6 +300,17 @@ export function addOpening(
     );
   }
 
+  // The partition may already be open here through the other room's copy of it.
+  const clash = openingsOnWall(plan, wall).find((existing) => {
+    return Math.min(existing.to, offset + width) - Math.max(existing.from, offset) > FIT_TOLERANCE_IN;
+  });
+
+  if (clash) {
+    return fail(
+      `A ${width}in opening at offset ${offset}in would overlap ${clash.opening.id}, which already runs from ${Math.round(clash.from)}in to ${Math.round(clash.to)}in along ${wall.id}. Pick an offset clear of it, or remove ${clash.opening.id} first.`,
+    );
+  }
+
   const owners = plan.rooms.filter((room) => room.wallIds.includes(wall.id));
   const primary = owners[0];
 
@@ -385,13 +400,38 @@ export function placeFurniture(
     );
   }
 
+  const rotation = input.rotation ?? (input.position ? 0 : auto.rotation);
+  const corners = furniturePolygon({
+    id: 'probe',
+    catalogId: input.catalogId,
+    roomId: room.id,
+    position,
+    rotation,
+    footprint: input.footprint,
+  });
+
+  // The centre being inside says nothing about the piece: a 80in bed centred
+  // 6in from the wall still hangs most of itself into the next room.
+  const spans = boundingBox(corners);
+  const fits =
+    spans.minX >= box.minX - FIT_TOLERANCE_IN &&
+    spans.maxX <= box.maxX + FIT_TOLERANCE_IN &&
+    spans.minY >= box.minY - FIT_TOLERANCE_IN &&
+    spans.maxY <= box.maxY + FIT_TOLERANCE_IN;
+
+  if (!fits) {
+    return fail(
+      `A ${input.footprint.w}x${input.footprint.d}in ${input.catalogId} at (${position.x}, ${position.y}) rotated ${rotation}deg spans x ${Math.round(spans.minX)}-${Math.round(spans.maxX)} and y ${Math.round(spans.minY)}-${Math.round(spans.maxY)}, which runs outside ${room.name} (x ${box.minX}-${box.maxX}, y ${box.minY}-${box.maxY}). Move it further in, rotate it, or use a smaller footprint.`,
+    );
+  }
+
   const id = uniqueId(next, `${input.catalogId}-${room.id}`);
   const item: Furniture = {
     id,
     catalogId: input.catalogId,
     roomId: room.id,
     position,
-    rotation: input.rotation ?? (input.position ? 0 : auto.rotation),
+    rotation,
     footprint: input.footprint,
     ...(input.clearanceFrontIn === undefined ? {} : { clearanceFront: input.clearanceFrontIn }),
   };

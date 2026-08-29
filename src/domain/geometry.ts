@@ -220,6 +220,63 @@ export function coincidentWalls(plan: Floorplan, wall: Wall): Wall[] {
   });
 }
 
+/**
+ * Where an opening recorded against `source` falls along `target`, measured
+ * from target.start. The two are the same physical partition drawn by
+ * different rooms, and the second copy usually runs the other way, so the
+ * offset cannot simply be carried across.
+ */
+export function openingSpanOnWall(
+  target: Wall,
+  source: Wall,
+  opening: Opening,
+): { from: number; to: number } {
+  const targetLength = distance(target.start, target.end) || 1;
+  const sourceLength = distance(source.start, source.end) || 1;
+
+  const along = {
+    x: (target.end.x - target.start.x) / targetLength,
+    y: (target.end.y - target.start.y) / targetLength,
+  };
+  const sourceAlong = {
+    x: (source.end.x - source.start.x) / sourceLength,
+    y: (source.end.y - source.start.y) / sourceLength,
+  };
+
+  const ends = [opening.offset, opening.offset + opening.width].map((distanceAlong) => {
+    const world = {
+      x: source.start.x + sourceAlong.x * distanceAlong,
+      y: source.start.y + sourceAlong.y * distanceAlong,
+    };
+    return (world.x - target.start.x) * along.x + (world.y - target.start.y) * along.y;
+  });
+
+  return { from: Math.min(...ends), to: Math.max(...ends) };
+}
+
+/**
+ * Every opening in the physical partition `wall` belongs to, positioned along
+ * `wall` and ordered from its start.
+ *
+ * Rooms each draw their own copy of a shared wall, so an opening cut into one
+ * leaf is physically present in the other. Anything reasoning about what a wall
+ * is actually open at -- rendering it, or checking whether a new opening would
+ * land on top of one -- has to see both, which is why this lives here rather
+ * than being rediscovered by each caller.
+ */
+export function openingsOnWall(
+  plan: Floorplan,
+  wall: Wall,
+): { opening: Opening; from: number; to: number }[] {
+  return coincidentWalls(plan, wall)
+    .flatMap((source) =>
+      plan.openings
+        .filter((opening) => opening.wallId === source.id)
+        .map((opening) => ({ opening, ...openingSpanOnWall(wall, source, opening) })),
+    )
+    .sort((first, second) => first.from - second.from);
+}
+
 export function roomWalls(plan: Floorplan, room: Room): Wall[] {
   const wallsById = new Map(plan.walls.map((wall) => [wall.id, wall]));
   return room.wallIds.map((id) => wallsById.get(id)).filter((wall): wall is Wall => Boolean(wall));

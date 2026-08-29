@@ -178,6 +178,28 @@ describe('addOpening', () => {
     const result = expectOk(addOpening(plan, { wallId: 'bed2-E', kind: 'window', offsetIn: 12, widthIn: 36 }));
     expect(validate(result.plan).some((violation) => violation.code === 'BEDROOM_EGRESS')).toBe(false);
   });
+
+  it('refuses an opening that lands on one already there', () => {
+    // living-bed1 runs 48-80in along bed1-N.
+    const error = expectFail(addOpening(sampleFloorplan, { wallId: 'bed1-N', kind: 'door', offsetIn: 60, widthIn: 32 }));
+
+    expect(error).toContain('would overlap living-bed1');
+    expect(error).toMatch(/48in to 80in/);
+  });
+
+  it('sees an opening through the neighbour copy of the same partition', () => {
+    // hall-bed2 is recorded against bed2-W; hall-E is the hallway's copy of that
+    // wall, so the doorway is physically in the way from that side too.
+    const error = expectFail(addOpening(sampleFloorplan, { wallId: 'hall-E', kind: 'door', offsetIn: 84, widthIn: 30 }));
+
+    expect(error).toContain('would overlap hall-bed2');
+  });
+
+  it('allows an opening that only touches the edge of another', () => {
+    const result = expectOk(addOpening(sampleFloorplan, { wallId: 'bed1-N', kind: 'door', offsetIn: 12, widthIn: 36 }));
+
+    expect(result.plan.openings).toHaveLength(sampleFloorplan.openings.length + 1);
+  });
 });
 
 describe('placeFurniture', () => {
@@ -215,6 +237,36 @@ describe('placeFurniture', () => {
 
     expect(error).toContain('outside Bedroom 2');
     expect(error).toContain('Omit position');
+  });
+
+  it('refuses a piece whose footprint hangs out of the room', () => {
+    // The centre is inside Bedroom 1, but an 80in-deep bed centred 6in from the
+    // north wall puts most of itself in the living room.
+    const error = expectFail(placeFurniture(sampleFloorplan, {
+      roomId: 'bed1',
+      catalogId: 'queen-bed',
+      footprint: { w: 60, d: 80 },
+      position: { x: 60, y: 186 },
+    }));
+
+    expect(error).toContain('runs outside Bedroom 1');
+    expect(error).toMatch(/spans x \d+-\d+ and y \d+-\d+/);
+  });
+
+  it('measures the footprint after rotation, not before', () => {
+    // 100x24 lies along the room's 132in width, but turned 90deg it needs 100in
+    // of the 120in depth and no longer fits where it sits.
+    const flat = placeFurniture(sampleFloorplan, {
+      roomId: 'bed1', catalogId: 'bench', footprint: { w: 100, d: 24 },
+      position: { x: 66, y: 210 }, rotation: 0,
+    });
+    const turned = placeFurniture(sampleFloorplan, {
+      roomId: 'bed1', catalogId: 'bench', footprint: { w: 100, d: 24 },
+      position: { x: 66, y: 210 }, rotation: 90,
+    });
+
+    expect(flat.ok).toBe(true);
+    expect(turned.ok).toBe(false);
   });
 });
 
