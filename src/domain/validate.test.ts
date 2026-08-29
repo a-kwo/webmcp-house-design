@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { addRoom } from './operations';
 import { sampleFloorplan } from './sampleFloorplan';
 import type { Floorplan, Violation } from './types';
 import { validate } from './validate';
@@ -352,6 +353,25 @@ describe('structural rules', () => {
     const violation = find(plan, 'LOAD_BEARING_REMOVED', sampleFloorplan);
     expect(violation?.severity).toBe('warning');
     expect(violation?.suggestion).toContain('add_opening');
+  });
+
+  it('does not call a wall split in two a loss of structure', () => {
+    // Building against bed2-E cuts it at y = 264; the remainder stands as a
+    // second wall. Nothing was removed, so nothing structural was lost.
+    const result = addRoom(sampleFloorplan, {
+      name: 'Bedroom 3', type: 'bedroom', widthIn: 120, depthIn: 120,
+      attachTo: { roomId: 'bed2', side: 'east' },
+    });
+
+    if (!result.ok) {
+      throw new Error(result.error);
+    }
+
+    const pieces = result.plan.walls.filter((wall) => wall.id.startsWith('bed2-E'));
+    expect(pieces).toHaveLength(2);
+    expect(pieces.reduce((sum, wall) => sum + Math.abs(wall.end.y - wall.start.y), 0)).toBe(156);
+
+    expect(codes(result.plan, sampleFloorplan)).not.toContain('LOAD_BEARING_REMOVED');
   });
 
   it('ignores a trimmed partition wall and a small structural nudge', () => {

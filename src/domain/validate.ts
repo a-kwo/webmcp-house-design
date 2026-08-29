@@ -412,7 +412,12 @@ function validateStructuralWalls(plan: Floorplan, previous?: Floorplan): Violati
         }];
       }
 
-      const lostLength = distance(before.start, before.end) - distance(after.start, after.end);
+      // A wall that a new room met part-way along was cut in two, not
+      // shortened: the remainder is still standing under a new id. Counting
+      // only `after` reports the offcut as lost structure.
+      const lostLength =
+        distance(before.start, before.end) - distance(after.start, after.end) - offcutLength(plan, previous, after);
+
       if (lostLength <= STRUCTURAL_SHORTENED_IN) {
         return [];
       }
@@ -425,6 +430,33 @@ function validateStructuralWalls(plan: Floorplan, previous?: Floorplan): Violati
         suggestion: `Use add_opening to pass through ${after.id} instead of shortening it, or head off the opening with a beam.`,
       }];
     });
+}
+
+/**
+ * How much of `wall` is carried by pieces that did not exist before it: the
+ * far half of a split, lying on the same line and continuing past its end.
+ */
+function offcutLength(plan: Floorplan, previous: Floorplan, wall: Wall): number {
+  const previousIds = new Set(previous.walls.map((candidate) => candidate.id));
+  const vertical = Math.abs(wall.start.x - wall.end.x) < ADJACENCY_TOLERANCE_IN / 2;
+  const axis: 'x' | 'y' = vertical ? 'y' : 'x';
+  const line = vertical ? wall.start.x : wall.start.y;
+
+  return plan.walls
+    .filter((candidate) => {
+      if (previousIds.has(candidate.id) || candidate.id === wall.id) {
+        return false;
+      }
+
+      const candidateVertical = Math.abs(candidate.start.x - candidate.end.x) < ADJACENCY_TOLERANCE_IN / 2;
+      if (candidateVertical !== vertical) {
+        return false;
+      }
+
+      const candidateLine = candidateVertical ? candidate.start.x : candidate.start.y;
+      return Math.abs(candidateLine - line) < ADJACENCY_TOLERANCE_IN / 2;
+    })
+    .reduce((total, candidate) => total + Math.abs(candidate.end[axis] - candidate.start[axis]), 0);
 }
 
 /**
