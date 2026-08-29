@@ -12,7 +12,7 @@ import type { Camera, CameraMode, Variant } from '../state/floorplanStore';
 import {
   DOLLHOUSE_WALL_HEIGHT_IN,
   cameraPose,
-  changedWalls,
+  proposedWalls,
   furniturePlacement,
   openingPlacement,
   wallPanelRects,
@@ -231,10 +231,10 @@ function CameraRig({ plan, camera }: { plan: Floorplan; camera: Camera }) {
 /**
  * The walls a proposed variant would move, drawn over the live plan so the
  * human can see the alternative in place before committing to it. Only the
- * changed walls are ghosted; everything else is already on screen.
+ * relocated walls are ghosted; everything else is already on screen.
  */
 function VariantGhost({ plan, variant, wallHeight }: { plan: Floorplan; variant: Variant; wallHeight: number }) {
-  const walls = changedWalls(plan, variant.plan);
+  const walls = proposedWalls(plan, variant.plan);
 
   return (
     <group>

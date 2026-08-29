@@ -7,6 +7,7 @@ import {
   DOLLHOUSE_WALL_HEIGHT_IN,
   cameraPose,
   changedWalls,
+  proposedWalls,
   furnitureHeight,
   furniturePlacement,
   openingPlacement,
@@ -202,6 +203,31 @@ describe('changedWalls', () => {
     });
 
     expect(changedWalls(sampleFloorplan, plan).map((wall) => wall.id)).toEqual(['brand-new']);
+  });
+});
+
+describe('proposedWalls', () => {
+  it('ghosts the wall that relocated, not the ones it stretched', () => {
+    const variant = expectOk(moveWall(sampleFloorplan, { wallId: 'hall-E', distanceIn: 12, direction: 'east' }));
+    const proposed = proposedWalls(sampleFloorplan, variant.plan).map((wall) => wall.id).sort();
+    const changed = changedWalls(sampleFloorplan, variant.plan).map((wall) => wall.id).sort();
+
+    // hall-E and the copy bed2 draws of it both move to x = 270. The four walls
+    // meeting them only change length, and two of those sit on the plan's south
+    // edge, right in front of the iso camera.
+    expect(proposed).toEqual(['bed2-W', 'hall-E']);
+    expect(changed).toContain('hall-S');
+    expect(proposed).not.toContain('hall-S');
+    expect(proposed).not.toContain('bed2-S');
+  });
+
+  it('falls back to every changed wall when nothing relocated', () => {
+    const plan = clonePlan();
+    const stretched = plan.walls.find((wall) => wall.id === 'living-N')!;
+    stretched.end = { x: stretched.end.x + 24, y: stretched.end.y };
+
+    // The line is unchanged, so there is no relocation to show on its own.
+    expect(proposedWalls(sampleFloorplan, plan).map((wall) => wall.id)).toEqual(['living-N']);
   });
 });
 

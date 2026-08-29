@@ -1,13 +1,13 @@
 import {
   boundingBox,
-  coincidentWalls,
+  openingsOnWall,
   polygonCentroid,
   roomAdjacency,
   roomPolygon,
   samePoint,
 } from '../domain/geometry';
 import type { Camera } from '../state/floorplanStore';
-import type { Floorplan, Furniture, Opening, Room, Wall } from '../domain/types';
+import type { Floorplan, Furniture, Room, Wall } from '../domain/types';
 
 /**
  * Plan space is 2D inches with +y running south (down the page). World space is
@@ -78,32 +78,6 @@ export function wallPlacement(wall: Wall): Placement & { length: number } {
 }
 
 /**
- * Where an opening recorded against `source` falls along `target`, which is the
- * same physical partition drawn by the other room -- often in the opposite
- * direction, so the offset cannot simply be copied across.
- */
-function openingSpanOn(target: Wall, source: Wall, opening: Opening): { from: number; to: number } {
-  const length = Math.hypot(target.end.x - target.start.x, target.end.y - target.start.y) || 1;
-  const unit = { x: (target.end.x - target.start.x) / length, y: (target.end.y - target.start.y) / length };
-
-  const sourceLength = Math.hypot(source.end.x - source.start.x, source.end.y - source.start.y) || 1;
-  const sourceUnit = {
-    x: (source.end.x - source.start.x) / sourceLength,
-    y: (source.end.y - source.start.y) / sourceLength,
-  };
-
-  const ends = [opening.offset, opening.offset + opening.width].map((along) => {
-    const world = {
-      x: source.start.x + sourceUnit.x * along,
-      y: source.start.y + sourceUnit.y * along,
-    };
-    return (world.x - target.start.x) * unit.x + (world.y - target.start.y) * unit.y;
-  });
-
-  return { from: Math.min(...ends), to: Math.max(...ends) };
-}
-
-/**
  * The wall panel as a rectangle with rectangular holes, in the wall's local
  * frame.
  *
@@ -125,16 +99,10 @@ export function wallPanelRects(
   const ceiling = Math.max(wallHeightIn, LINTEL_IN + EDGE_EPSILON_IN * 2);
   const maxTop = ceiling - LINTEL_IN;
 
-  const holes = coincidentWalls(plan, wall)
-    .flatMap((source) =>
-      plan.openings
-        .filter((opening) => opening.wallId === source.id)
-        .map((opening) => ({ source, opening })),
-    )
-    .flatMap(({ source, opening }) => {
-      const span = openingSpanOn(wall, source, opening);
-      const left = Math.max(span.from, EDGE_EPSILON_IN);
-      const right = Math.min(span.to, length - EDGE_EPSILON_IN);
+  const holes = openingsOnWall(plan, wall)
+    .flatMap(({ opening, from, to }) => {
+      const left = Math.max(from, EDGE_EPSILON_IN);
+      const right = Math.min(to, length - EDGE_EPSILON_IN);
       const bottom = Math.max(opening.sillHeight, EDGE_EPSILON_IN);
       const top = Math.min(opening.sillHeight + opening.height, maxTop);
 
@@ -185,6 +153,41 @@ export function changedWalls(current: Floorplan, variant: Floorplan): Wall[] {
 
     return !samePoint(previous.start, wall.start) || !samePoint(previous.end, wall.end);
   });
+}
+
+/**
+ * The walls a variant actually relocates: the proposal itself, as opposed to
+ * the perpendicular walls that merely got longer or shorter because of it.
+ *
+ * Moving one partition changes the endpoints of every wall meeting it, and
+ * ghosting all of them buries the proposal -- worse, the ones on the near edge
+ * of the plan sit between the camera and everything else and swamp the frame.
+ * A wall counts as relocated when its old start no longer lies on its new line.
+ * Falls back to every changed wall when a variant only resizes.
+ */
+export function proposedWalls(current: Floorplan, variant: Floorplan): Wall[] {
+  const before = new Map(current.walls.map((wall) => [wall.id, wall]));
+
+  const relocated = variant.walls.filter((wall) => {
+    const previous = before.get(wall.id);
+    if (!previous) {
+      return true;
+    }
+
+    const dx = wall.end.x - wall.start.x;
+    const dy = wall.end.y - wall.start.y;
+    const length = Math.hypot(dx, dy);
+    if (length === 0) {
+      return false;
+    }
+
+    const offLine =
+      Math.abs((previous.start.x - wall.start.x) * dy - (previous.start.y - wall.start.y) * dx) / length;
+
+    return offLine > 0.001;
+  });
+
+  return relocated.length > 0 ? relocated : changedWalls(current, variant);
 }
 
 export function furniturePlacement(item: Furniture): Placement & { size: Vec3 } {
