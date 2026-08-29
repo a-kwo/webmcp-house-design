@@ -23,6 +23,7 @@ const SELECTED = '#6ea8fe';
 const WALL_COLOR = '#cfc9bd';
 const FURNITURE_COLOR = '#a89c84';
 const GHOST = '#d8a657';
+const CEILING_COLOR = '#4a4742';
 
 const FLOOR_COLORS: Record<RoomType, string> = {
   bedroom: '#3a4152',
@@ -54,7 +55,15 @@ function useSelect(id: string) {
   };
 }
 
-function RoomFloor({ plan, room }: { plan: Floorplan; room: Room }) {
+function RoomFloor({
+  plan,
+  room,
+  ceiling,
+}: {
+  plan: Floorplan;
+  room: Room;
+  ceiling?: number;
+}) {
   const selected = useSelected(room.id);
   const onClick = useSelect(room.id);
 
@@ -73,10 +82,15 @@ function RoomFloor({ plan, room }: { plan: Floorplan; room: Room }) {
   }
 
   return (
-    <mesh geometry={geometry} rotation={[Math.PI / 2, 0, 0]} onClick={onClick}>
+    <mesh
+      geometry={geometry}
+      position={[0, ceiling ?? 0, 0]}
+      rotation={[Math.PI / 2, 0, 0]}
+      onClick={ceiling === undefined ? onClick : undefined}
+    >
       {/* The shape's normal points down once laid flat, so light both faces. */}
       <meshStandardMaterial
-        color={selected ? SELECTED : FLOOR_COLORS[room.type]}
+        color={ceiling === undefined ? (selected ? SELECTED : FLOOR_COLORS[room.type]) : CEILING_COLOR}
         side={THREE.DoubleSide}
         roughness={0.95}
       />
@@ -259,7 +273,7 @@ function VariantGhost({ plan, variant, wallHeight }: { plan: Floorplan; variant:
   );
 }
 
-function VariantBar({
+export function VariantBar({
   previewId,
   onPreview,
 }: {
@@ -308,7 +322,7 @@ function VariantBar({
   );
 }
 
-function CameraBar() {
+export function CameraBar() {
   const plan = useFloorplanStore((state) => state.plan);
   const camera = useFloorplanStore((state) => state.camera);
   const selection = useFloorplanStore((state) => state.selection);
@@ -372,9 +386,12 @@ export function Scene() {
       : Math.min(plan.ceilingHeight, DOLLHOUSE_WALL_HEIGHT_IN);
 
   const wallsById = new Map(plan.walls.map((wall) => [wall.id, wall]));
+  // Standing inside a room with open sky overhead reads as a model, not a room.
+  const walkingThrough = camera.mode === 'firstPerson';
 
   return (
     <div className="viewport">
+      <div className="viewport-canvas">
       <Canvas
         camera={{ fov: 50, near: 1, far: 5000, position: [500, 400, 500] }}
         onPointerMissed={() => clearSelection()}
@@ -386,6 +403,12 @@ export function Scene() {
         {plan.rooms.map((room) => (
           <RoomFloor key={room.id} plan={plan} room={room} />
         ))}
+
+        {walkingThrough
+          ? plan.rooms.map((room) => (
+              <RoomFloor key={`${room.id}-ceiling`} plan={plan} room={room} ceiling={plan.ceilingHeight} />
+            ))
+          : null}
 
         {plan.walls.map((wall) => (
           <WallPanel key={wall.id} plan={plan} wall={wall} wallHeight={wallHeight} />
@@ -413,6 +436,7 @@ export function Scene() {
         <CameraRig plan={plan} camera={camera} />
       </Canvas>
       <CameraBar />
+      </div>
       <VariantBar previewId={previewId} onPreview={setPreviewId} />
     </div>
   );
