@@ -3,6 +3,8 @@ import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { Edges, OrbitControls } from '@react-three/drei';
 import type { ThreeEvent } from '@react-three/fiber';
 import * as THREE from 'three';
+import { catalogItem } from '../domain/catalog';
+import { moveFurniture, placeFurniture } from '../domain/operations';
 import { roomPolygon } from '../domain/geometry';
 import { FurnitureModel } from './FurnitureModel';
 import { TEXTURE_SPAN_IN, surfaceTextures } from './textures';
@@ -84,7 +86,38 @@ function RoomFloor({
   ceiling?: number;
 }) {
   const selected = useSelected(room.id);
-  const onClick = useSelect(room.id);
+  const selectRoom = useSelect(room.id);
+  const armedCatalogId = useFloorplanStore((state) => state.armedCatalogId);
+  const armCatalog = useFloorplanStore((state) => state.armCatalog);
+  const applyOperation = useFloorplanStore((state) => state.applyOperation);
+  const select = useFloorplanStore((state) => state.select);
+
+  // An armed palette item turns the next floor click into a placement -- the
+  // click's world point becomes the piece's centre, through the same operation
+  // the agent's place_furniture uses.
+  const onClick = (event: ThreeEvent<MouseEvent>) => {
+    const armed = armedCatalogId ? catalogItem(armedCatalogId) : undefined;
+    if (!armed) {
+      selectRoom(event);
+      return;
+    }
+
+    event.stopPropagation();
+    const result = applyOperation((current) =>
+      placeFurniture(current, {
+        roomId: room.id,
+        catalogId: armed.id,
+        footprint: { w: armed.w, d: armed.d },
+        position: { x: event.point.x, y: event.point.z },
+        ...(armed.clearanceFront === undefined ? {} : { clearanceFrontIn: armed.clearanceFront }),
+      }),
+    );
+
+    armCatalog(null);
+    if (result.ok) {
+      select([result.changed[0]]);
+    }
+  };
 
   const geometry = useMemo(() => {
     const points = roomPolygon(plan, room);
@@ -305,21 +338,124 @@ function DoorLeaf({ opening, width, height }: { opening: Opening; width: number;
   );
 }
 
+/** Where a pointer ray meets the floor plane, in plan inches. */
+function floorPoint(event: ThreeEvent<PointerEvent>): { x: number; y: number } | null {
+  const { origin, direction } = event.ray;
+  if (Math.abs(direction.y) < 1e-6) {
+    return null;
+  }
+  const t = -origin.y / direction.y;
+  return t > 0 ? { x: origin.x + direction.x * t, y: origin.z + direction.z * t } : null;
+}
+
 function FurniturePiece({ item }: { item: Furniture }) {
   const selected = useSelected(item.id);
   const onClick = useSelect(item.id);
+  const applyOperation = useFloorplanStore((state) => state.applyOperation);
+  const controls = useThree((state) => state.controls) as { enabled: boolean } | null;
+  const camera = useThree((state) => state.camera);
+  const gl = useThree((state) => state.gl);
   const placement = furniturePlacement(item);
+
+  // Dragging previews locally and commits one move_furniture on release, so
+  // the human's drag and the agent's tool call are the same operation -- same
+  // grid snap, same fit rules, same violations in the rail afterwards.
+  //
+  // Only the grab itself goes through r3f; the rest of the gesture listens on
+  // the window and unprojects the mouse against the floor plane directly.
+  // Pointer capture inside the scene graph proved unreliable, and a drag must
+  // survive the cursor crossing walls, other furniture, or leaving the canvas.
+  const [dragPosition, setDragPosition] = useState<{ x: number; y: number } | null>(null);
+  const drag = useRef({ active: false, moved: false, offset: { x: 0, y: 0 }, at: { x: 0, y: 0 } });
+
+  const mouseToFloor = (clientX: number, clientY: number): { x: number; y: number } | null => {
+    const rect = gl.domElement.getBoundingClientRect();
+    const ndc = new THREE.Vector2(
+      ((clientX - rect.left) / rect.width) * 2 - 1,
+      -(((clientY - rect.top) / rect.height) * 2 - 1),
+    );
+    const raycaster = new THREE.Raycaster();
+    raycaster.setFromCamera(ndc, camera);
+    const { origin, direction } = raycaster.ray;
+    if (Math.abs(direction.y) < 1e-6) {
+      return null;
+    }
+    const t = -origin.y / direction.y;
+    return t > 0 ? { x: origin.x + direction.x * t, y: origin.z + direction.z * t } : null;
+  };
+
+  const onPointerDown = (event: ThreeEvent<PointerEvent>) => {
+    const at = floorPoint(event);
+    if (!at) {
+      return;
+    }
+
+    event.stopPropagation();
+    drag.current = {
+      active: true,
+      moved: false,
+      offset: { x: item.position.x - at.x, y: item.position.y - at.y },
+      at: { ...item.position },
+    };
+    setDragPosition({ ...item.position });
+    if (controls) {
+      controls.enabled = false;
+    }
+
+    const onWindowMove = (move: PointerEvent) => {
+      if (!drag.current.active) {
+        return;
+      }
+      const here = mouseToFloor(move.clientX, move.clientY);
+      if (!here) {
+        return;
+      }
+      const next = { x: here.x + drag.current.offset.x, y: here.y + drag.current.offset.y };
+      if (Math.hypot(next.x - item.position.x, next.y - item.position.y) > 2) {
+        drag.current.moved = true;
+      }
+      drag.current.at = next;
+      setDragPosition(next);
+    };
+
+    const onWindowUp = () => {
+      window.removeEventListener('pointermove', onWindowMove);
+      if (!drag.current.active) {
+        return;
+      }
+
+      drag.current.active = false;
+      if (controls) {
+        controls.enabled = true;
+      }
+
+      if (drag.current.moved) {
+        // A rejected landing spot leaves the store untouched, so clearing the
+        // preview snaps the piece back to where it really is.
+        applyOperation((plan) => moveFurniture(plan, { furnitureId: item.id, position: drag.current.at }));
+      }
+      setDragPosition(null);
+    };
+
+    window.addEventListener('pointermove', onWindowMove);
+    window.addEventListener('pointerup', onWindowUp, { once: true });
+  };
+
+  const shown: [number, number, number] = dragPosition
+    ? [dragPosition.x, placement.position[1], dragPosition.y]
+    : placement.position;
 
   return (
     <FurnitureModel
       catalogId={item.catalogId}
-      position={placement.position}
+      position={shown}
       rotationY={placement.rotationY}
       w={placement.size[0]}
       h={placement.size[1]}
       d={placement.size[2]}
-      selected={selected}
+      selected={selected || dragPosition !== null}
       onClick={onClick}
+      onPointerDown={onPointerDown}
     />
   );
 }

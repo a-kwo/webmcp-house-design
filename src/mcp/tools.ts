@@ -1,7 +1,8 @@
 import { z } from 'zod';
 import { zodToJsonSchema } from 'zod-to-json-schema';
 import { boundingBox, coincidentWalls, computeRoomSummaries, roomDimensions, roomPolygon } from '../domain/geometry';
-import { addOpening, addRoom, moveWall, placeFurniture, removeElement, resizeRoom } from '../domain/operations';
+import { addOpening, addRoom, moveFurniture, moveWall, placeFurniture, removeElement, resizeRoom } from '../domain/operations';
+import { TEMPLATES } from '../domain/templates';
 import type { Floorplan } from '../domain/types';
 import { validate } from '../domain/validate';
 import type { CameraMode, FloorplanState, ToolEnvelope, Variant } from '../state/floorplanStore';
@@ -75,7 +76,11 @@ const schemas = {
   }),
   validate_layout: z.object({}),
   get_camera: z.object({}),
+  list_templates: z.object({}),
 
+  start_from_template: z.object({
+    templateId: z.string().describe('One of the ids from list_templates.'),
+  }),
   add_room: z.object({
     name: z.string().describe('Human-facing name, e.g. "Guest Bedroom".'),
     type: roomTypeSchema,
@@ -109,6 +114,12 @@ const schemas = {
       .describe('Omit to auto-place against the most sensible wall.'),
     rotation: z.number().optional().describe('Degrees; 0 faces the bottom of the plan.'),
     clearanceFrontIn: z.number().optional().describe('Approach space required in front of the piece.'),
+  }),
+  move_furniture: z.object({
+    furnitureId: z.string(),
+    position: z.object({ x: z.number(), y: z.number() }).optional()
+      .describe('New centre in plan inches; the room it lands in is inferred.'),
+    rotation: z.number().optional().describe('Degrees; 0 faces the bottom of the plan.'),
   }),
   remove_element: z.object({
     elementId: z.string().describe('A wall, room, opening or furniture id.'),
@@ -234,7 +245,7 @@ function buildVariants(plan: Floorplan, input: z.infer<typeof schemas.propose_va
   });
 }
 
-const READ_ONLY_TOOLS = new Set(['get_layout', 'get_selection', 'compute_areas', 'validate_layout', 'get_camera']);
+const READ_ONLY_TOOLS = new Set(['get_layout', 'get_selection', 'compute_areas', 'validate_layout', 'get_camera', 'list_templates']);
 
 /**
  * Registers the tool set against the page. Read tools and write tools are
@@ -313,7 +324,21 @@ export async function registerFloorplanTools(
 
   register('get_camera', 'Where the camera is and what it is looking at, in plain language.', () => state().camera);
 
+  register('list_templates', 'The starting templates a design can begin from, with which one is loaded now.', () => ({
+    current: state().templateId,
+    chosen: state().templateChosen,
+    templates: TEMPLATES.map((template) => ({
+      id: template.id,
+      name: template.name,
+      description: template.description,
+      rooms: template.spec.rooms.map((room) => `${room.name} (${Math.round((room.w * room.d) / 144)} sq ft)`),
+    })),
+  }));
+
   // ---- write tools: each returns the violations its own edit caused.
+  register('start_from_template', 'Start a fresh design from a template, replacing the current plan and its history.', (input) =>
+    envelope(state().loadTemplate(input.templateId)));
+
   register('add_room', 'Add a room, optionally attached to an existing one so they share a wall.', (input) =>
     envelope(state().applyOperation((plan) => addRoom(plan, input))));
 
@@ -328,6 +353,9 @@ export async function registerFloorplanTools(
 
   register('place_furniture', 'Place a catalog item in a room; omit position to auto-place against a wall.', (input) =>
     envelope(state().applyOperation((plan) => placeFurniture(plan, input))));
+
+  register('move_furniture', 'Move or turn a piece already in the plan; dropping it in another room re-homes it.', (input) =>
+    envelope(state().applyOperation((plan) => moveFurniture(plan, input))));
 
   register('remove_element', 'Remove a wall, room, opening or furniture item, cascading to what depends on it.', (input) =>
     envelope(state().applyOperation((plan) => removeElement(plan, input.elementId))));

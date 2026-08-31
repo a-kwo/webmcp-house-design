@@ -274,3 +274,100 @@ code {
 .history-actions code {
   color: #777168;
 }
+
+.template-picker {
+  align-items: center;
+  backdrop-filter: blur(3px);
+  background: rgba(16, 16, 15, 0.78);
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  position: fixed;
+  z-index: 20;
+}
+
+.template-picker-inner {
+  background: #1d1d1c;
+  border: 1px solid #3a3a38;
+  border-radius: 12px;
+  max-width: 720px;
+  padding: 28px 32px 32px;
+}
+
+.template-picker-inner h2 {
+  color: #e6e2d8;
+  font-size: 22px;
+  margin: 0 0 8px;
+  text-transform: none;
+}
+
+.template-cards {
+  display: flex;
+  gap: 14px;
+  margin-top: 18px;
+}
+
+.template-card {
+  background: #232322;
+  border: 1px solid #3a3a38;
+  border-radius: 8px;
+  color: inherit;
+  cursor: pointer;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  font: inherit;
+  gap: 6px;
+  padding: 14px;
+  text-align: left;
+}
+
+.template-card:hover {
+  border-color: #6ea8fe;
+}
+
+.template-card strong {
+  color: #e6e2d8;
+  font-size: 15px;
+}
+
+.template-card span {
+  color: #aaa59b;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.template-thumb {
+  background: #171716;
+  border-radius: 4px;
+  height: 110px;
+  margin-bottom: 6px;
+  width: 100%;
+}
+
+.palette {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.palette-hint {
+  margin-bottom: 10px;
+}
+
+.chip {
+  background: #2c2c2b;
+  border: 1px solid #3d3d3b;
+  border-radius: 12px;
+  color: #d5d0c6;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  padding: 4px 10px;
+}
+
+.chip.armed {
+  background: #2a3a55;
+  border-color: #6ea8fe;
+  color: #cfe0ff;
+}

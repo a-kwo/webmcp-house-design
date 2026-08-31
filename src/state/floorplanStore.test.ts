@@ -133,3 +133,51 @@ describe('variants', () => {
     expect(!result.ok && result.error).toContain('propose_variants first');
   });
 });
+
+describe('templates', () => {
+  it('starts a fresh design and drops the old history', () => {
+    floorplanStore.getState().applyOperation((plan) => moveWall(plan, { wallId: 'hall-E', distanceIn: 12, direction: 'east' }));
+    expect(floorplanStore.getState().undoStack).toHaveLength(1);
+
+    const result = floorplanStore.getState().loadTemplate('studio');
+
+    expect(result.ok).toBe(true);
+    expect(floorplanStore.getState().plan.rooms.map((room) => room.id)).toEqual(['main', 'bath', 'closet']);
+    expect(floorplanStore.getState().undoStack).toHaveLength(0);
+    expect(floorplanStore.getState().templateChosen).toBe(true);
+  });
+
+  it('lists what is available when the id is unknown', () => {
+    const result = floorplanStore.getState().loadTemplate('mansion');
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error).toContain('studio');
+      expect(result.error).toContain('two-bed');
+    }
+  });
+
+  it('reset returns to the chosen template, not the default', () => {
+    floorplanStore.getState().loadTemplate('studio');
+    floorplanStore.getState().applyOperation((plan) => moveWall(plan, { wallId: 'main-E', distanceIn: 12, direction: 'west' }));
+
+    floorplanStore.getState().reset();
+
+    expect(floorplanStore.getState().plan.rooms.map((room) => room.id)).toEqual(['main', 'bath', 'closet']);
+    expect(floorplanStore.getState().undoStack).toHaveLength(0);
+  });
+});
+
+describe('palette arming', () => {
+  it('arms one catalog item at a time and disarms on template load', () => {
+    floorplanStore.getState().armCatalog('sofa');
+    expect(floorplanStore.getState().armedCatalogId).toBe('sofa');
+
+    floorplanStore.getState().armCatalog(null);
+    expect(floorplanStore.getState().armedCatalogId).toBeNull();
+
+    floorplanStore.getState().armCatalog('table');
+    floorplanStore.getState().loadTemplate('one-bed');
+    expect(floorplanStore.getState().armedCatalogId).toBeNull();
+  });
+});
+

@@ -178,6 +178,7 @@ export function FurnitureModel({
   h,
   selected,
   onClick,
+  onPointerDown,
 }: {
   catalogId: string;
   position: [number, number, number];
@@ -187,12 +188,18 @@ export function FurnitureModel({
   h: number;
   selected: boolean;
   onClick: (event: ThreeEvent<MouseEvent>) => void;
+  onPointerDown?: (event: ThreeEvent<PointerEvent>) => void;
 }) {
   const Model = MODELS[catalogId] ?? Generic;
 
   return (
     // The group's y is the floor; models build upward from 0.
-    <group position={[position[0], 0, position[2]]} rotation={[0, rotationY, 0]} onClick={onClick}>
+    <group
+      position={[position[0], 0, position[2]]}
+      rotation={[0, rotationY, 0]}
+      onClick={onClick}
+      onPointerDown={onPointerDown}
+    >
       <Model w={w} d={d} h={h} />
       {selected ? (
         // A translucent envelope over the whole piece, so selection reads the

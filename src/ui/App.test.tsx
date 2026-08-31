@@ -42,6 +42,7 @@ function installContext() {
 }
 
 beforeEach(() => {
+  floorplanStore.setState({ templateId: 'two-bed', templateChosen: false });
   floorplanStore.getState().reset();
 });
 

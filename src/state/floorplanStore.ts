@@ -2,6 +2,7 @@ import { createStore } from 'zustand/vanilla';
 import { useStore } from 'zustand';
 import type { OperationResult } from '../domain/operations';
 import { sampleFloorplan } from '../domain/sampleFloorplan';
+import { DEFAULT_TEMPLATE_ID, TEMPLATES, buildTemplate, templateById } from '../domain/templates';
 import type { Floorplan, Violation } from '../domain/types';
 import { validate } from '../domain/validate';
 
@@ -43,8 +44,16 @@ export type FloorplanState = {
   camera: Camera;
   undoStack: Floorplan[];
   variants: Variant[];
+  /** Which template this design started from; reset returns to it. */
+  templateId: string;
+  /** False until someone -- human or agent -- picks a starting point. */
+  templateChosen: boolean;
+  /** Catalog item armed in the palette; the next floor click places it. */
+  armedCatalogId: string | null;
 
   applyOperation: (operation: (plan: Floorplan) => OperationResult) => ToolEnvelope;
+  loadTemplate: (templateId: string) => ToolEnvelope;
+  armCatalog: (catalogId: string | null) => void;
   select: (elementIds: string[]) => void;
   clearSelection: () => void;
   setCamera: (camera: Partial<Camera>) => void;
@@ -80,6 +89,9 @@ export const floorplanStore = createStore<FloorplanState>()((set, get) => ({
   camera: { mode: 'iso', targetRoomId: null, description: 'Looking down at the whole plan from the south-east.' },
   undoStack: [],
   variants: [],
+  templateId: DEFAULT_TEMPLATE_ID,
+  templateChosen: false,
+  armedCatalogId: null,
 
   applyOperation: (operation) => {
     const previous = get().plan;
@@ -99,6 +111,37 @@ export const floorplanStore = createStore<FloorplanState>()((set, get) => ({
 
     return { ok: true, changed: result.changed, violations, summary: result.summary };
   },
+
+  loadTemplate: (templateId) => {
+    const template = templateById(templateId);
+
+    if (!template) {
+      const available = TEMPLATES.map((candidate) => candidate.id).join(', ');
+      return { ok: false, error: `No template "${templateId}". Available: ${available}.` };
+    }
+
+    // A template is a fresh start, not an edit: the history of the previous
+    // design would make undo step "back" into a different house.
+    const plan = buildTemplate(templateId);
+    set({
+      plan,
+      templateId,
+      templateChosen: true,
+      undoStack: [],
+      variants: [],
+      selection: { elementIds: [], kind: null },
+      armedCatalogId: null,
+    });
+
+    return {
+      ok: true,
+      changed: plan.rooms.map((room) => room.id),
+      violations: validate(plan),
+      summary: `Started from the ${template.name} template: ${template.description}`,
+    };
+  },
+
+  armCatalog: (catalogId) => set({ armedCatalogId: catalogId }),
 
   select: (elementIds) => {
     const plan = get().plan;
@@ -168,13 +211,14 @@ export const floorplanStore = createStore<FloorplanState>()((set, get) => ({
   },
 
   reset: () =>
-    set({
-      plan: sampleFloorplan,
+    set((state) => ({
+      plan: buildTemplate(state.templateId),
       selection: { elementIds: [], kind: null },
       camera: { mode: 'iso', targetRoomId: null, description: 'Looking down at the whole plan from the south-east.' },
       undoStack: [],
       variants: [],
-    }),
+      armedCatalogId: null,
+    })),
 }));
 
 export function useFloorplanStore<T>(selector: (state: FloorplanState) => T): T {

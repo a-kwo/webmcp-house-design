@@ -33,6 +33,7 @@ function Harness() {
 }
 
 beforeEach(() => {
+  floorplanStore.setState({ templateId: 'two-bed', templateChosen: false });
   floorplanStore.getState().reset();
 });
 

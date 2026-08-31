@@ -37,6 +37,9 @@ function fakeContext() {
 }
 
 async function setup() {
+  // reset() honours whichever template a previous test started from; pin the
+  // fixture so every test sees the two-bedroom sample.
+  floorplanStore.setState({ templateId: 'two-bed', templateChosen: false });
   floorplanStore.getState().reset();
   const context = fakeContext();
   const dispose = await registerFloorplanTools(context);
@@ -53,8 +56,9 @@ describe('registration', () => {
 
     for (const name of [
       'get_layout', 'get_selection', 'compute_areas', 'validate_layout', 'get_camera',
+      'list_templates', 'start_from_template',
       'add_room', 'move_wall', 'resize_room', 'add_opening', 'place_furniture',
-      'remove_element', 'set_camera', 'undo', 'propose_variants',
+      'move_furniture', 'remove_element', 'set_camera', 'undo', 'propose_variants',
     ]) {
       expect(context.tools.has(name)).toBe(true);
     }
@@ -62,7 +66,7 @@ describe('registration', () => {
 
   it('pairs every write tool with a read tool that reflects live state', async () => {
     const { context } = await setup();
-    const reads = ['get_layout', 'get_selection', 'compute_areas', 'validate_layout', 'get_camera'];
+    const reads = ['get_layout', 'get_selection', 'compute_areas', 'validate_layout', 'get_camera', 'list_templates'];
     expect(reads.every((name) => context.tools.has(name))).toBe(true);
   });
 
@@ -148,6 +152,36 @@ describe('read tools', () => {
   });
 });
 
+describe('templates over the wire', () => {
+  it('lists the templates with the current one marked', async () => {
+    const { call } = await setup();
+    const result = call('list_templates');
+
+    expect(result.current).toBe('two-bed');
+    expect(result.templates.map((template: { id: string }) => template.id)).toContain('studio');
+    expect(result.templates[0].rooms.length).toBeGreaterThan(0);
+  });
+
+  it('starts a fresh design and reports its violations', async () => {
+    const { call } = await setup();
+    const result = call('start_from_template', { templateId: 'studio' });
+
+    expect(result.ok).toBe(true);
+    expect(result.summary).toContain('Studio');
+    expect(result.violations).toEqual([]);
+    expect(call('get_layout').rooms.map((room: { id: string }) => room.id)).toEqual(['main', 'bath', 'closet']);
+    expect(call('undo').ok).toBe(false);
+  });
+
+  it('names the available ids when the template is unknown', async () => {
+    const { call } = await setup();
+    const result = call('start_from_template', { templateId: 'castle' });
+
+    expect(result.ok).toBe(false);
+    expect(result.error).toContain('one-bed');
+  });
+});
+
 describe('write tools', () => {
   it('returns the violations its own edit caused, without a second call', async () => {
     const { call } = await setup();
@@ -172,6 +206,17 @@ describe('write tools', () => {
 
     expect(result.ok).toBe(false);
     expect(result.error).toContain('Invalid input for move_wall');
+  });
+
+  it('moves furniture and reports the rooms involved', async () => {
+    const { call } = await setup();
+    const result = call('move_furniture', { furnitureId: 'sofa-1', position: { x: 320, y: 180 } });
+
+    expect(result.ok).toBe(true);
+    expect(result.summary).toContain('into Bedroom 2');
+
+    const layout = call('get_layout', { detail: 'full' });
+    expect(layout.furniture.find((item: { id: string }) => item.id === 'sofa-1').roomId).toBe('bed2');
   });
 
   it('undoes back to the starting plan', async () => {

@@ -3,6 +3,8 @@ import { computeRoomSummaries } from '../domain/geometry';
 import { validate } from '../domain/validate';
 import { registerFloorplanTools, resolveModelContext } from '../mcp/tools';
 import { Scene } from './Scene';
+import { TemplatePicker } from './TemplatePicker';
+import { CATALOG } from '../domain/catalog';
 import { useFloorplanStore } from '../state/floorplanStore';
 
 export function App() {
@@ -10,6 +12,8 @@ export function App() {
   const selection = useFloorplanStore((state) => state.selection);
   const select = useFloorplanStore((state) => state.select);
   const undo = useFloorplanStore((state) => state.undo);
+  const armedCatalogId = useFloorplanStore((state) => state.armedCatalogId);
+  const armCatalog = useFloorplanStore((state) => state.armCatalog);
   const reset = useFloorplanStore((state) => state.reset);
   const undoDepth = useFloorplanStore((state) => state.undoStack.length);
   const [toolsReady, setToolsReady] = useState(false);
@@ -78,6 +82,24 @@ export function App() {
           </ul>
         </section>
         <section>
+          <h2>Furniture</h2>
+          <p className="note palette-hint">
+            {armedCatalogId ? 'Now click a floor to place it.' : 'Pick a piece, then click a floor. Drag pieces to move them.'}
+          </p>
+          <div className="palette">
+            {CATALOG.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                className={armedCatalogId === item.id ? 'chip armed' : 'chip'}
+                onClick={() => armCatalog(armedCatalogId === item.id ? null : item.id)}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+        </section>
+        <section>
           <h2>
             Violations <span className="count">{violations.length}</span>
           </h2>
@@ -129,6 +151,7 @@ export function App() {
         </section>
       </aside>
       <Scene />
+      <TemplatePicker />
     </main>
   );
 }

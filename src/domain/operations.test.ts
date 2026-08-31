@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { computeRoomSummaries, roomDimensions } from './geometry';
-import { addOpening, addRoom, moveWall, placeFurniture, removeElement, resizeRoom } from './operations';
+import { addOpening, addRoom, moveFurniture, moveWall, placeFurniture, removeElement, resizeRoom } from './operations';
 import type { OperationResult } from './operations';
 import { sampleFloorplan } from './sampleFloorplan';
 import type { Floorplan } from './types';
@@ -313,6 +313,58 @@ describe('placeFurniture', () => {
 
     expect(flat.ok).toBe(true);
     expect(turned.ok).toBe(false);
+  });
+});
+
+describe('moveFurniture', () => {
+  it('moves a piece within its room, snapped to the grid', () => {
+    const result = expectOk(moveFurniture(sampleFloorplan, { furnitureId: 'sofa-1', position: { x: 101, y: 98 } }));
+    const sofa = result.plan.furniture.find((item) => item.id === 'sofa-1')!;
+
+    expect(sofa.position).toEqual({ x: 102, y: 96 });
+    expect(sofa.roomId).toBe('living');
+    expect(result.summary).toContain('within Living Room');
+  });
+
+  it('re-homes a piece dropped in a different room', () => {
+    // The dresser-sized dresser fits anywhere; carry the sofa to Bedroom 2.
+    const result = expectOk(moveFurniture(sampleFloorplan, { furnitureId: 'sofa-1', position: { x: 320, y: 180 } }));
+    const sofa = result.plan.furniture.find((item) => item.id === 'sofa-1')!;
+
+    expect(sofa.roomId).toBe('bed2');
+    expect(result.changed).toContain('living');
+    expect(result.changed).toContain('bed2');
+    expect(result.summary).toContain('into Bedroom 2');
+  });
+
+  it('turns a piece in place', () => {
+    const result = expectOk(moveFurniture(sampleFloorplan, { furnitureId: 'bed-2', rotation: 90 }));
+    const bed = result.plan.furniture.find((item) => item.id === 'bed-2')!;
+
+    expect(bed.rotation).toBe(90);
+    expect(bed.position).toEqual(sampleFloorplan.furniture.find((item) => item.id === 'bed-2')!.position);
+  });
+
+  it('refuses a landing spot whose footprint runs out of the room', () => {
+    // Centre inside the bathroom, but the 80in-deep bed pokes past its north wall.
+    const error = expectFail(moveFurniture(sampleFloorplan, { furnitureId: 'bed-1', position: { x: 174, y: 210 } }));
+
+    expect(error).toContain('runs outside Bathroom');
+  });
+
+  it('refuses a position outside every room', () => {
+    const error = expectFail(moveFurniture(sampleFloorplan, { furnitureId: 'sofa-1', position: { x: -60, y: -60 } }));
+    expect(error).toContain('outside every room');
+  });
+
+  it('requires something to change', () => {
+    const error = expectFail(moveFurniture(sampleFloorplan, { furnitureId: 'sofa-1' }));
+    expect(error).toContain('needs a position or a rotation');
+  });
+
+  it('rejects an unknown id with a recovery hint', () => {
+    const error = expectFail(moveFurniture(sampleFloorplan, { furnitureId: 'ghost', position: { x: 60, y: 60 } }));
+    expect(error).toContain('get_layout');
   });
 });
 

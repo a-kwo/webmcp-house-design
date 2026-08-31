@@ -517,6 +517,76 @@ export function placeFurniture(
   };
 }
 
+/**
+ * Moves or turns a piece of furniture already in the plan. The human's drag
+ * and the agent's tool call are this same operation, so the two see identical
+ * snapping, identical fit rules, and identical errors.
+ *
+ * The destination room is inferred from where the piece lands, so a drag
+ * across a doorway re-homes it rather than failing for having left the room
+ * it started in.
+ */
+export function moveFurniture(
+  plan: Floorplan,
+  input: { furnitureId: string; position?: Point; rotation?: number },
+): OperationResult {
+  const item = plan.furniture.find((candidate) => candidate.id === input.furnitureId);
+  if (!item) {
+    return fail(`No furniture with id "${input.furnitureId}". Call get_layout to list the current furniture ids.`);
+  }
+
+  if (input.position === undefined && input.rotation === undefined) {
+    return fail(`move_furniture needs a position or a rotation for ${item.catalogId} ${item.id}.`);
+  }
+
+  const position = input.position
+    ? { x: snapToGrid(input.position.x, GRID_IN), y: snapToGrid(input.position.y, GRID_IN) }
+    : { ...item.position };
+  const rotation = input.rotation ?? item.rotation;
+
+  const next = clone(plan);
+  const room = next.rooms.find((candidate) => {
+    const box = roomBox(next, candidate);
+    return position.x >= box.minX && position.x <= box.maxX && position.y >= box.minY && position.y <= box.maxY;
+  });
+
+  if (!room) {
+    return fail(
+      `Position (${position.x}, ${position.y}) is outside every room. Call get_layout for the room bounds.`,
+    );
+  }
+
+  const box = roomBox(next, room);
+  const spans = boundingBox(furniturePolygon({ ...item, position, rotation }));
+  const fits =
+    spans.minX >= box.minX - FIT_TOLERANCE_IN &&
+    spans.maxX <= box.maxX + FIT_TOLERANCE_IN &&
+    spans.minY >= box.minY - FIT_TOLERANCE_IN &&
+    spans.maxY <= box.maxY + FIT_TOLERANCE_IN;
+
+  if (!fits) {
+    return fail(
+      `The ${item.catalogId} at (${position.x}, ${position.y}) rotated ${rotation}deg spans x ${Math.round(spans.minX)}-${Math.round(spans.maxX)} and y ${Math.round(spans.minY)}-${Math.round(spans.maxY)}, which runs outside ${room.name} (x ${box.minX}-${box.maxX}, y ${box.minY}-${box.maxY}). Keep it further from the walls or rotate it.`,
+    );
+  }
+
+  const moved = next.furniture.find((candidate) => candidate.id === item.id)!;
+  const previousRoom = moved.roomId;
+  moved.position = position;
+  moved.rotation = rotation;
+  moved.roomId = room.id;
+
+  const rehomed = previousRoom !== room.id;
+  return {
+    ok: true,
+    plan: next,
+    changed: [item.id, room.id, ...(rehomed ? [previousRoom] : [])],
+    summary: rehomed
+      ? `Moved ${item.catalogId} ${item.id} into ${room.name}.`
+      : `Moved ${item.catalogId} ${item.id} within ${room.name}.`,
+  };
+}
+
 export function removeElement(plan: Floorplan, elementId: string): OperationResult {
   const wall = plan.walls.find((candidate) => candidate.id === elementId);
   if (wall) {
