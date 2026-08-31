@@ -212,6 +212,20 @@ describe('write tools', () => {
     expect(result.error).toContain('Invalid input for move_wall');
   });
 
+  it('carries a colour through to the placed piece', async () => {
+    // The operation always supported colour; the schema silently stripped it,
+    // so an agent asking for a navy sofa got the default and no error.
+    const { call } = await setup();
+    const result = call('place_furniture', {
+      roomId: 'living', catalogId: 'sofa', footprint: { w: 84, d: 36 },
+      position: { x: 60, y: 120 }, color: '#46536b',
+    });
+
+    expect(result.ok).toBe(true);
+    const layout = call('get_layout', { detail: 'full' });
+    expect(layout.furniture.find((item: { id: string }) => item.id === result.changed[0]).color).toBe('#46536b');
+  });
+
   it('moves furniture and reports the rooms involved', async () => {
     const { call } = await setup();
     const result = call('move_furniture', { furnitureId: 'sofa-1', position: { x: 320, y: 180 } });

@@ -19,8 +19,8 @@ export default defineConfig({
         },
       },
     },
-    // three is most of the bundle and nothing here can shrink it, so the limit
-    // reflects what a 3D app actually costs.
-    chunkSizeWarningLimit: 1200,
+    // three plus the postprocessing stack is most of the bundle and nothing
+    // here can shrink it, so the limit reflects what a 3D app actually costs.
+    chunkSizeWarningLimit: 1500,
   },
 });

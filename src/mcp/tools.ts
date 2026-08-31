@@ -114,6 +114,7 @@ const schemas = {
       .describe('Omit to auto-place against the most sensible wall.'),
     rotation: z.number().optional().describe('Degrees; 0 faces the bottom of the plan.'),
     clearanceFrontIn: z.number().optional().describe('Approach space required in front of the piece.'),
+    color: z.string().optional().describe('Finish for the primary surfaces, any CSS colour; omit for the default look.'),
   }),
   move_furniture: z.object({
     furnitureId: z.string(),

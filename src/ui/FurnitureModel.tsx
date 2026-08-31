@@ -43,6 +43,8 @@ function Part({
   sz,
   color,
   roughness = 0.85,
+  metalness = 0,
+  emissive,
 }: {
   x?: number;
   y: number;
@@ -52,6 +54,8 @@ function Part({
   sz: number;
   color: string;
   roughness?: number;
+  metalness?: number;
+  emissive?: string;
 }) {
   // Bevelled corners are most of the difference between furniture and
   // packing crates; the radius is capped so thin parts stay slab-shaped.
@@ -59,7 +63,13 @@ function Part({
 
   return (
     <RoundedBox position={[x, y, z]} args={[sx, sy, sz]} radius={radius} smoothness={3} castShadow receiveShadow>
-      <meshStandardMaterial color={color} roughness={roughness} />
+      <meshStandardMaterial
+        color={color}
+        roughness={roughness}
+        metalness={metalness}
+        emissive={emissive ?? '#000000'}
+        emissiveIntensity={emissive ? 0.55 : 0}
+      />
     </RoundedBox>
   );
 }
@@ -123,7 +133,7 @@ function Sink({ w, d, h }: ModelProps) {
     <>
       <Part y={h * 0.45} sx={w * 0.24} sy={h * 0.9} sz={d * 0.24} color={PORCELAIN} roughness={0.4} />
       <Part y={h * 0.93} sx={w} sy={h * 0.14} sz={d} color={PORCELAIN} roughness={0.35} />
-      <Part z={-d * 0.3} y={h * 1.05} sx={w * 0.08} sy={h * 0.24} sz={d * 0.12} color={STEEL} roughness={0.25} />
+      <Part z={-d * 0.3} y={h * 1.05} sx={w * 0.08} sy={h * 0.24} sz={d * 0.12} color={STEEL} roughness={0.22} metalness={0.85} />
     </>
   );
 }
@@ -141,7 +151,7 @@ function Island({ w, d, h, tint }: ModelProps) {
 function Range({ w, d, h, tint }: ModelProps) {
   return (
     <>
-      <Part y={h / 2 - 1} sx={w} sy={h - 2} sz={d} color={tint ?? STEEL} roughness={0.45} />
+      <Part y={h / 2 - 1} sx={w} sy={h - 2} sz={d} color={tint ?? STEEL} roughness={0.4} metalness={0.7} />
       <Part y={h - 0.8} sx={w * 0.94} sy={1.6} sz={d * 0.94} color="#3a3a3a" roughness={0.6} />
       {/* Oven door face on +z, the front. */}
       <Part z={d / 2 - 0.6} y={h * 0.38} sx={w * 0.84} sy={h * 0.5} sz={1} color="#4a4a4a" roughness={0.35} />
@@ -156,7 +166,7 @@ function Television({ w, d, h, tint }: ModelProps) {
     <>
       <Part y={cabinet / 2} sx={w} sy={cabinet} sz={d} color={tint ?? DARK_WOOD} />
       {/* Panel leans against the back edge; the screen faces +z, the front. */}
-      <Part z={-d * 0.15} y={cabinet + h * 0.28} sx={w * 0.82} sy={h * 0.52} sz={2} color={SCREEN} roughness={0.25} />
+      <Part z={-d * 0.15} y={cabinet + h * 0.28} sx={w * 0.82} sy={h * 0.52} sz={2} color={SCREEN} roughness={0.2} emissive="#1a2733" />
       <Part z={-d * 0.15} y={cabinet + h * 0.04} sx={w * 0.2} sy={h * 0.06} sz={d * 0.4} color={STEEL} />
     </>
   );
@@ -167,11 +177,11 @@ function Fridge({ w, d, h, tint }: ModelProps) {
 
   return (
     <>
-      <Part y={h / 2} sx={w} sy={h} sz={d} color={tint ?? STEEL} roughness={0.35} />
+      <Part y={h / 2} sx={w} sy={h} sz={d} color={tint ?? STEEL} roughness={0.3} metalness={0.75} />
       {/* Freezer seam and two door handles on the +z face. */}
       <Part z={d / 2 + 0.2} y={split} sx={w * 0.96} sy={1} sz={0.8} color="#7d8184" />
-      <Part x={w * 0.32} z={d / 2 + 1.2} y={split + h * 0.12} sx={1.5} sy={h * 0.2} sz={1.5} color="#c9cccf" roughness={0.25} />
-      <Part x={w * 0.32} z={d / 2 + 1.2} y={split - h * 0.16} sx={1.5} sy={h * 0.24} sz={1.5} color="#c9cccf" roughness={0.25} />
+      <Part x={w * 0.32} z={d / 2 + 1.2} y={split + h * 0.12} sx={1.5} sy={h * 0.2} sz={1.5} color="#c9cccf" roughness={0.22} metalness={0.85} />
+      <Part x={w * 0.32} z={d / 2 + 1.2} y={split - h * 0.16} sx={1.5} sy={h * 0.24} sz={1.5} color="#c9cccf" roughness={0.22} metalness={0.85} />
     </>
   );
 }
@@ -223,7 +233,7 @@ function Nightstand({ w, d, h, tint }: ModelProps) {
     <>
       <Part y={h / 2} sx={w} sy={h} sz={d} color={tint ?? WOOD} />
       <Part z={d / 2 + 0.3} y={h * 0.68} sx={w * 0.8} sy={h * 0.28} sz={0.8} color={DARK_WOOD} />
-      <Part z={d / 2 + 1} y={h * 0.68} sx={w * 0.3} sy={1.2} sz={1.2} color={STEEL} roughness={0.3} />
+      <Part z={d / 2 + 1} y={h * 0.68} sx={w * 0.3} sy={1.2} sz={1.2} color={STEEL} roughness={0.25} metalness={0.85} />
     </>
   );
 }
@@ -234,8 +244,8 @@ function Wardrobe({ w, d, h, tint }: ModelProps) {
       <Part y={h / 2} sx={w} sy={h} sz={d} color={tint ?? WOOD} />
       {/* Centre seam and a handle either side of it. */}
       <Part z={d / 2 + 0.2} y={h / 2} sx={0.8} sy={h * 0.96} sz={0.8} color={DARK_WOOD} />
-      <Part x={-w * 0.06} z={d / 2 + 1} y={h * 0.52} sx={1.2} sy={h * 0.16} sz={1.2} color={STEEL} roughness={0.3} />
-      <Part x={w * 0.06} z={d / 2 + 1} y={h * 0.52} sx={1.2} sy={h * 0.16} sz={1.2} color={STEEL} roughness={0.3} />
+      <Part x={-w * 0.06} z={d / 2 + 1} y={h * 0.52} sx={1.2} sy={h * 0.16} sz={1.2} color={STEEL} roughness={0.25} metalness={0.85} />
+      <Part x={w * 0.06} z={d / 2 + 1} y={h * 0.52} sx={1.2} sy={h * 0.16} sz={1.2} color={STEEL} roughness={0.25} metalness={0.85} />
     </>
   );
 }
@@ -264,7 +274,7 @@ function Shower({ w, d, h }: ModelProps) {
         <boxGeometry args={[1, h - 4, d]} />
         <meshStandardMaterial color={GLASS} transparent opacity={0.25} roughness={0.05} />
       </mesh>
-      <Part z={-d / 2 + 2} y={h * 0.9} sx={2} sy={2} sz={8} color={STEEL} roughness={0.25} />
+      <Part z={-d / 2 + 2} y={h * 0.9} sx={2} sy={2} sz={8} color={STEEL} roughness={0.22} metalness={0.85} />
     </>
   );
 }
@@ -293,7 +303,7 @@ function WallTelevision({ w, h }: ModelProps) {
 
   return (
     <>
-      <Part z={-1} y={h - panel / 2} sx={w} sy={panel} sz={2} color={SCREEN} roughness={0.2} />
+      <Part z={-1} y={h - panel / 2} sx={w} sy={panel} sz={2} color={SCREEN} roughness={0.2} emissive="#1a2733" />
       <Part z={-2.2} y={h - panel / 2} sx={w * 0.2} sy={panel * 0.4} sz={2} color={STEEL} />
     </>
   );

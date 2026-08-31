@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
-import { Edges, OrbitControls } from '@react-three/drei';
+import { Edges, Environment, Lightformer, OrbitControls } from '@react-three/drei';
+import { EffectComposer, N8AO, SMAA, Vignette } from '@react-three/postprocessing';
 import type { ThreeEvent } from '@react-three/fiber';
 import * as THREE from 'three';
 import { catalogItem } from '../domain/catalog';
@@ -164,8 +165,9 @@ function RoomFloor({
       <meshStandardMaterial
         color={color}
         map={map}
+        roughnessMap={map ? (TILED.has(room.type) ? surfaceTextures().tileRough : surfaceTextures().woodRough) : null}
         side={THREE.DoubleSide}
-        roughness={TILED.has(room.type) ? 0.55 : 0.9}
+        roughness={map ? 1 : TILED.has(room.type) ? 0.55 : 0.9}
       />
     </mesh>
   );
@@ -287,7 +289,8 @@ function WallPanel({ plan, wall, wallHeight }: { plan: Floorplan; wall: Wall; wa
         <meshStandardMaterial
           color={selected ? SELECTED : WALL_COLOR}
           map={selected ? null : surfaceTextures().plaster}
-          roughness={0.85}
+          roughnessMap={selected ? null : surfaceTextures().plasterRough}
+          roughness={selected ? 0.85 : 1}
           side={THREE.DoubleSide}
           polygonOffset={selected}
           polygonOffsetFactor={-1}
@@ -420,7 +423,7 @@ function floorPoint(event: ThreeEvent<PointerEvent>): { x: number; y: number } |
   return t > 0 ? { x: origin.x + direction.x * t, y: origin.z + direction.z * t } : null;
 }
 
-function FurniturePiece({ item }: { item: Furniture }) {
+function FurniturePiece({ item, wallHeight }: { item: Furniture; wallHeight: number }) {
   const selected = useSelected(item.id);
   const onClick = useSelect(item.id);
   const applyOperation = useFloorplanStore((state) => state.applyOperation);
@@ -519,6 +522,14 @@ function FurniturePiece({ item }: { item: Furniture }) {
     ? [dragPosition.x, placement.position[1], dragPosition.y]
     : placement.position;
 
+  // A mounted panel hangs at eye height, but the overhead views cut walls to
+  // 42in -- drawn at its true height it floats above the stub instead of
+  // sitting on the wall face. Squash it onto whatever wall is visible; the
+  // walkthrough shows full walls, so there it hangs where it really is.
+  const height = item.catalogId === 'tv-wall'
+    ? Math.max(26, Math.min(placement.size[1], wallHeight - 3))
+    : placement.size[1];
+
   return (
     <>
       <FurnitureModel
@@ -526,7 +537,7 @@ function FurniturePiece({ item }: { item: Furniture }) {
         position={shown}
         rotationY={rotationPreview !== null ? (-rotationPreview * Math.PI) / 180 : placement.rotationY}
         w={placement.size[0]}
-        h={placement.size[1]}
+        h={height}
         d={placement.size[2]}
         selected={selected || dragPosition !== null}
         tint={item.color}
@@ -792,8 +803,8 @@ function Daylight({ plan }: { plan: Floorplan }) {
       {/* Hemisphere light ignores surfaces facing straight down, so ceiling
           undersides went black in the walkthrough; a whisper of flat ambient
           keeps them readable without flattening the shadows. */}
-      <ambientLight intensity={0.18} color="#d8d2c4" />
-      <hemisphereLight args={['#cfd8e6', '#5a5248', 0.9]} />
+      <ambientLight intensity={0.1} color="#d8d2c4" />
+      <hemisphereLight args={['#cfd8e6', '#5a5248', 0.55]} />
       <directionalLight
         position={[centre.x + reach * 0.8, reach * 1.4, centre.z + reach * 0.6]}
         target-position={[centre.x, 0, centre.z]}
@@ -989,12 +1000,32 @@ export function Scene() {
         })}
 
         {plan.furniture.map((item) => (
-          <FurniturePiece key={item.id} item={item} />
+          <FurniturePiece key={item.id} item={item} wallHeight={wallHeight} />
         ))}
 
         {preview ? <VariantGhost plan={plan} variant={preview} wallHeight={wallHeight} /> : null}
 
         <CameraRig plan={plan} camera={camera} />
+
+        {/* A procedural environment map: a bright soft ceiling, a warm window
+            wall and a cool fill. This is what steel, porcelain and glass
+            reflect. Built from Lightformers so nothing is fetched -- a CDN
+            HDRI that fails to load would leave the scene flat again. */}
+        <Environment resolution={128} frames={1} environmentIntensity={0.45}>
+          <color attach="background" args={['#20232a']} />
+          <Lightformer form="rect" intensity={3} position={[0, 400, 0]} rotation={[Math.PI / 2, 0, 0]} scale={[600, 600, 1]} color="#f4efe4" />
+          <Lightformer form="rect" intensity={2} position={[500, 120, 100]} rotation={[0, -Math.PI / 2, 0]} scale={[500, 180, 1]} color="#ffe8c8" />
+          <Lightformer form="rect" intensity={1.2} position={[-500, 100, -100]} rotation={[0, Math.PI / 2, 0]} scale={[400, 150, 1]} color="#c9d6e8" />
+        </Environment>
+
+        {/* Ambient occlusion is the last mile: contact darkening where walls
+            meet floors and under every piece. SMAA replaces MSAA (off below),
+            and a light vignette settles the frame. */}
+        <EffectComposer multisampling={0}>
+          <N8AO aoRadius={24} intensity={3.5} distanceFalloff={1} halfRes />
+          <SMAA />
+          <Vignette offset={0.28} darkness={0.5} />
+        </EffectComposer>
       </Canvas>
       <CameraBar />
       <SelectionActions />

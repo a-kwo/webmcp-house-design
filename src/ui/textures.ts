@@ -22,7 +22,7 @@ const PX_PER_IN = SIZE / TEXTURE_SPAN_IN;
 
 type Painter = (ctx: CanvasRenderingContext2D) => void;
 
-function makeTexture(paint: Painter): THREE.Texture | null {
+function makeTexture(paint: Painter, data = false): THREE.Texture | null {
   if (typeof document === 'undefined') {
     return null;
   }
@@ -40,7 +40,8 @@ function makeTexture(paint: Painter): THREE.Texture | null {
   const texture = new THREE.CanvasTexture(canvas);
   texture.wrapS = THREE.RepeatWrapping;
   texture.wrapT = THREE.RepeatWrapping;
-  texture.colorSpace = THREE.SRGBColorSpace;
+  // Roughness maps carry data, not colour; sRGB-decoding them shifts values.
+  texture.colorSpace = data ? THREE.NoColorSpace : THREE.SRGBColorSpace;
   texture.anisotropy = 4;
   texture.repeat.set(1 / TEXTURE_SPAN_IN, 1 / TEXTURE_SPAN_IN);
   return texture;
@@ -129,14 +130,82 @@ function paintPlaster(ctx: CanvasRenderingContext2D): void {
   }
 }
 
-let cache: { wood: THREE.Texture | null; tile: THREE.Texture | null; plaster: THREE.Texture | null } | undefined;
+/**
+ * Roughness companions to the colour maps: grey value = roughness. Uniform
+ * roughness is what makes surfaces read as plastic -- planks vary sheen plank
+ * to plank, grout is matte against fired tile, plaster has a faint eggshell
+ * mottle.
+ */
+function paintPlankRoughness(ctx: CanvasRenderingContext2D): void {
+  const rand = rng(7);
+  const plankWidth = 8 * PX_PER_IN;
+  const plankLength = 48 * PX_PER_IN;
 
-export function surfaceTextures() {
+  ctx.fillStyle = '#cccccc';
+  ctx.fillRect(0, 0, SIZE, SIZE);
+
+  for (let row = 0; row < SIZE / plankWidth; row += 1) {
+    const offset = -((row * 0.4 + rand()) % 1) * plankLength;
+    for (let x = offset; x < SIZE; x += plankLength) {
+      rand();
+      const grey = Math.round(150 + rand() * 60);
+      ctx.fillStyle = `rgb(${grey}, ${grey}, ${grey})`;
+      ctx.fillRect(x + 1, row * plankWidth + 1, plankLength - 2, plankWidth - 2);
+      rand(); rand(); rand();
+    }
+  }
+}
+
+function paintTileRoughness(ctx: CanvasRenderingContext2D): void {
+  const tile = 12 * PX_PER_IN;
+
+  // Matte grout...
+  ctx.fillStyle = '#e0e0e0';
+  ctx.fillRect(0, 0, SIZE, SIZE);
+  // ...glazed tile.
+  ctx.fillStyle = '#6a6a6a';
+  for (let y = 0; y < SIZE; y += tile) {
+    for (let x = 0; x < SIZE; x += tile) {
+      ctx.fillRect(x + 1.5, y + 1.5, tile - 3, tile - 3);
+    }
+  }
+}
+
+function paintPlasterRoughness(ctx: CanvasRenderingContext2D): void {
+  const rand = rng(41);
+  ctx.fillStyle = '#d8d8d8';
+  ctx.fillRect(0, 0, SIZE, SIZE);
+  for (let blot = 0; blot < 2500; blot += 1) {
+    const x = rand() * SIZE;
+    const y = rand() * SIZE;
+    const radius = 1 + rand() * 5;
+    ctx.fillStyle = rand() > 0.5 ? 'rgba(255,255,255,0.03)' : 'rgba(150,150,150,0.03)';
+    ctx.beginPath();
+    ctx.arc(x, y, radius, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+type Surfaces = {
+  wood: THREE.Texture | null;
+  tile: THREE.Texture | null;
+  plaster: THREE.Texture | null;
+  woodRough: THREE.Texture | null;
+  tileRough: THREE.Texture | null;
+  plasterRough: THREE.Texture | null;
+};
+
+let cache: Surfaces | undefined;
+
+export function surfaceTextures(): Surfaces {
   if (!cache) {
     cache = {
       wood: makeTexture(paintPlanks),
       tile: makeTexture(paintTiles),
       plaster: makeTexture(paintPlaster),
+      woodRough: makeTexture(paintPlankRoughness, true),
+      tileRough: makeTexture(paintTileRoughness, true),
+      plasterRough: makeTexture(paintPlasterRoughness, true),
     };
   }
   return cache;
