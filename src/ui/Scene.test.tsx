@@ -2,10 +2,11 @@
 import { useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
-import { moveWall } from '../domain/operations';
+import { moveFurniture, moveWall } from '../domain/operations';
+import { sampleFloorplan } from '../domain/sampleFloorplan';
 import { floorplanStore } from '../state/floorplanStore';
 import type { Variant } from '../state/floorplanStore';
-import { CameraBar, VariantBar } from './Scene';
+import { CameraBar, SelectionActions, VariantBar } from './Scene';
 
 /**
  * The canvas itself needs WebGL, which jsdom has none of. These are the two
@@ -127,5 +128,51 @@ describe('variant bar', () => {
     const active = container.querySelectorAll('.variant-card.active');
     expect(active).toHaveLength(1);
     expect(active[0].textContent).toContain('Take 12in from Bedroom 2.');
+  });
+});
+
+describe('selection actions', () => {
+  it('stays hidden unless furniture is selected', () => {
+    floorplanStore.getState().select(['living']);
+    const { container } = render(<SelectionActions />);
+
+    expect(container.querySelector('.selection-actions')).toBeNull();
+  });
+
+  it('turns the selected piece a quarter turn, like the agent would', () => {
+    floorplanStore.getState().select(['sofa-1']);
+    render(<SelectionActions />);
+
+    fireEvent.click(screen.getByText(/Rotate/));
+
+    const sofa = floorplanStore.getState().plan.furniture.find((item) => item.id === 'sofa-1')!;
+    expect(sofa.rotation).toBe(90);
+    expect(floorplanStore.getState().undoStack).toHaveLength(1);
+  });
+
+  it('rotates on the R key too', () => {
+    floorplanStore.getState().select(['sofa-1']);
+    render(<SelectionActions />);
+
+    fireEvent.keyDown(window, { key: 'r' });
+
+    const sofa = floorplanStore.getState().plan.furniture.find((item) => item.id === 'sofa-1')!;
+    expect(sofa.rotation).toBe(90);
+  });
+
+  it('shows the refusal when a turn does not fit', () => {
+    // Park the bed against Bedroom 1's west wall; turned 90deg its 80in side
+    // would poke through it.
+    floorplanStore.getState().applyOperation((plan) =>
+      moveFurniture(plan, { furnitureId: 'bed-1', position: { x: 30, y: 252 } }),
+    );
+    floorplanStore.getState().select(['bed-1']);
+    render(<SelectionActions />);
+
+    fireEvent.click(screen.getByText(/Rotate/));
+
+    const bed = floorplanStore.getState().plan.furniture.find((item) => item.id === 'bed-1')!;
+    expect(bed.rotation).toBe(0);
+    expect(screen.getByText(/runs outside/)).toBeDefined();
   });
 });

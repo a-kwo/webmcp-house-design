@@ -84,7 +84,11 @@ export function App() {
         <section>
           <h2>Furniture</h2>
           <p className="note palette-hint">
-            {armedCatalogId ? 'Now click a floor to place it.' : 'Pick a piece, then click a floor. Drag pieces to move them.'}
+            {armedCatalogId === 'tv-stand'
+              ? 'Click a floor for a TV stand, or a wall to mount it.'
+              : armedCatalogId
+                ? 'Now click a floor to place it.'
+                : 'Pick a piece, then click a floor. Drag to move, R to rotate.'}
           </p>
           <div className="palette">
             {CATALOG.map((item) => (

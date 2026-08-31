@@ -5,7 +5,7 @@ import type { ThreeEvent } from '@react-three/fiber';
 import * as THREE from 'three';
 import { catalogItem } from '../domain/catalog';
 import { moveFurniture, placeFurniture } from '../domain/operations';
-import { roomPolygon } from '../domain/geometry';
+import { boundingBox, roomPolygon } from '../domain/geometry';
 import { FurnitureModel } from './FurnitureModel';
 import { TEXTURE_SPAN_IN, surfaceTextures } from './textures';
 import { validate } from '../domain/validate';
@@ -20,6 +20,7 @@ import {
   proposedWalls,
   furniturePlacement,
   openingPlacement,
+  wallMountPlacement,
   wallPanelRects,
   wallPlacement,
 } from './sceneGeometry';
@@ -167,8 +168,55 @@ function RoomFloor({
 
 function WallPanel({ plan, wall, wallHeight }: { plan: Floorplan; wall: Wall; wallHeight: number }) {
   const selected = useSelected(wall.id);
-  const onClick = useSelect(wall.id);
+  const selectWall = useSelect(wall.id);
+  const armedCatalogId = useFloorplanStore((state) => state.armedCatalogId);
+  const armCatalog = useFloorplanStore((state) => state.armCatalog);
+  const applyOperation = useFloorplanStore((state) => state.applyOperation);
+  const select = useFloorplanStore((state) => state.select);
   const placement = wallPlacement(wall);
+
+  // An armed TV mounts on the wall that was clicked: hung on the clicked face,
+  // facing into the room the viewer is looking from. Every other armed item
+  // stands on floors, so walls keep their select behaviour.
+  const onClick = (event: ThreeEvent<MouseEvent>) => {
+    if (armedCatalogId !== 'tv-stand') {
+      selectWall(event);
+      return;
+    }
+
+    event.stopPropagation();
+    const at = { x: event.point.x, y: event.point.z };
+    const towards = { x: at.x - event.ray.direction.x, y: at.y - event.ray.direction.z };
+    const mount = wallMountPlacement(wall, at, towards, 60);
+
+    const room = plan.rooms.find((candidate) => {
+      const box = boundingBox(roomPolygon(plan, candidate));
+      return (
+        mount.position.x >= box.minX && mount.position.x <= box.maxX &&
+        mount.position.y >= box.minY && mount.position.y <= box.maxY
+      );
+    });
+
+    if (!room) {
+      return;
+    }
+
+    const result = applyOperation((current) =>
+      placeFurniture(current, {
+        roomId: room.id,
+        catalogId: 'tv-wall',
+        footprint: { w: 60, d: 4 },
+        position: mount.position,
+        rotation: mount.rotation,
+        clearanceFrontIn: 60,
+      }),
+    );
+
+    armCatalog(null);
+    if (result.ok) {
+      select([result.changed[0]]);
+    }
+  };
 
   const geometry = useMemo(() => {
     const { outline, holes } = wallPanelRects(plan, wall, wallHeight);
@@ -648,6 +696,60 @@ function Daylight({ plan }: { plan: Floorplan }) {
   );
 }
 
+/**
+ * Actions on whatever furniture is selected. Rotation goes through the same
+ * move_furniture operation the agent uses, so a quarter turn that no longer
+ * fits the room is refused with the same message either would see.
+ */
+export function SelectionActions() {
+  const plan = useFloorplanStore((state) => state.plan);
+  const selection = useFloorplanStore((state) => state.selection);
+  const applyOperation = useFloorplanStore((state) => state.applyOperation);
+  const [error, setError] = useState<string | null>(null);
+
+  const item = selection.kind === 'furniture'
+    ? plan.furniture.find((candidate) => candidate.id === selection.elementIds[0])
+    : undefined;
+
+  const rotate = () => {
+    if (!item) {
+      return;
+    }
+    const result = applyOperation((current) =>
+      moveFurniture(current, { furnitureId: item.id, rotation: (item.rotation + 90) % 360 }),
+    );
+    setError(result.ok ? null : result.error);
+  };
+
+  // R turns the selected piece; the button is the discoverable version.
+  useEffect(() => {
+    if (!item) {
+      return undefined;
+    }
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'r' || event.key === 'R') {
+        rotate();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [item?.id, item?.rotation]);
+
+  if (!item) {
+    return null;
+  }
+
+  return (
+    <div className="selection-actions">
+      <span className="selection-name">{item.catalogId}</span>
+      <button type="button" onClick={rotate}>Rotate 90&deg;</button>
+      <kbd>R</kbd>
+      {error ? <span className="selection-error">{error}</span> : null}
+    </div>
+  );
+}
+
 export function CameraBar() {
   const plan = useFloorplanStore((state) => state.plan);
   const camera = useFloorplanStore((state) => state.camera);
@@ -767,6 +869,7 @@ export function Scene() {
         <CameraRig plan={plan} camera={camera} />
       </Canvas>
       <CameraBar />
+      <SelectionActions />
       </div>
       <VariantBar previewId={previewId} onPreview={setPreviewId} />
     </div>

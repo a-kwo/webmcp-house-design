@@ -3,14 +3,17 @@ import { moveWall } from '../domain/operations';
 import type { OperationResult } from '../domain/operations';
 import { sampleFloorplan } from '../domain/sampleFloorplan';
 import type { Floorplan, Wall } from '../domain/types';
+import { CATALOG } from '../domain/catalog';
 import {
   DOLLHOUSE_WALL_HEIGHT_IN,
+  FURNITURE_HEIGHT_IN,
   cameraPose,
   changedWalls,
   proposedWalls,
   furnitureHeight,
   furniturePlacement,
   openingPlacement,
+  wallMountPlacement,
   wallPanelRects,
   wallPlacement,
 } from './sceneGeometry';
@@ -224,6 +227,55 @@ describe('furniturePlacement', () => {
 
   it('falls back to a default height for an unknown catalog id', () => {
     expect(furnitureHeight('grand-piano')).toBe(30);
+  });
+
+  it('gives every palette item an explicit height', () => {
+    // A new catalog entry without a height renders at the 30in fallback --
+    // a 30in-tall fridge -- and nothing else would catch it.
+    for (const item of CATALOG) {
+      expect(FURNITURE_HEIGHT_IN[item.id], item.id).toBeDefined();
+    }
+  });
+});
+
+describe('wallMountPlacement', () => {
+  it('hangs the panel off the clicked face, facing into that room', () => {
+    // living-E runs north-south at x = 216. A viewer in the living room is
+    // west of it, so the panel lands west of the wall and faces west.
+    const wall = sampleFloorplan.walls.find((candidate) => candidate.id === 'living-E')!;
+    const mount = wallMountPlacement(wall, { x: 216, y: 72 }, { x: 200, y: 72 }, 60);
+
+    expect(mount.position.x).toBeLessThan(216);
+    expect(mount.position.x).toBeGreaterThan(216 - 12);
+    expect(mount.position.y).toBeCloseTo(72);
+    expect(mount.rotation).toBe(90);
+  });
+
+  it('mounts on the other face for a viewer on the other side', () => {
+    const wall = sampleFloorplan.walls.find((candidate) => candidate.id === 'living-E')!;
+    const mount = wallMountPlacement(wall, { x: 216, y: 72 }, { x: 240, y: 72 }, 60);
+
+    expect(mount.position.x).toBeGreaterThan(216);
+    expect(mount.rotation).toBe(270);
+  });
+
+  it('clamps a click near a wall end so the panel stays on the wall', () => {
+    // living-N runs x 0-216 at y = 0; a click at x = 10 cannot centre a 60in
+    // panel without overhanging the corner.
+    const wall = sampleFloorplan.walls.find((candidate) => candidate.id === 'living-N')!;
+    const mount = wallMountPlacement(wall, { x: 10, y: 0 }, { x: 10, y: 40 }, 60);
+
+    expect(mount.position.x).toBeGreaterThanOrEqual(32);
+    expect(mount.rotation).toBe(0);
+  });
+
+  it('survives the placement snap with the panel depth inside the room', () => {
+    const wall = sampleFloorplan.walls.find((candidate) => candidate.id === 'living-E')!;
+    const mount = wallMountPlacement(wall, { x: 216, y: 72 }, { x: 200, y: 72 }, 60);
+    const snapped = Math.round(mount.position.x / 6) * 6;
+
+    // Panel is 4in deep; its whole depth must sit west of the wall line.
+    expect(snapped + 2).toBeLessThanOrEqual(216);
   });
 });
 

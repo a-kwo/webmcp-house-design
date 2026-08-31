@@ -371,3 +371,47 @@ code {
   border-color: #6ea8fe;
   color: #cfe0ff;
 }
+
+.selection-actions {
+  align-items: center;
+  background: rgba(23, 23, 23, 0.82);
+  border: 1px solid #343434;
+  border-radius: 8px;
+  display: flex;
+  gap: 8px;
+  padding: 6px 10px;
+  position: absolute;
+  right: 16px;
+  top: 16px;
+}
+
+.selection-name {
+  color: #aaa59b;
+  font-family: "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
+  font-size: 12px;
+}
+
+.selection-actions button {
+  background: #2c2c2b;
+  border: 1px solid #3d3d3b;
+  border-radius: 5px;
+  color: #e6e2d8;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  padding: 4px 10px;
+}
+
+.selection-actions kbd {
+  border: 1px solid #3d3d3b;
+  border-radius: 4px;
+  color: #777168;
+  font-size: 11px;
+  padding: 1px 5px;
+}
+
+.selection-error {
+  color: #d98b8b;
+  font-size: 12px;
+  max-width: 300px;
+}

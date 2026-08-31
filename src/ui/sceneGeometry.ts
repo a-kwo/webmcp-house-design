@@ -202,6 +202,46 @@ export function proposedWalls(current: Floorplan, variant: Floorplan): Wall[] {
   return relocated.length > 0 ? relocated : changedWalls(current, variant);
 }
 
+/**
+ * Where a wall-mounted piece lands when a wall is clicked at `at`: pushed off
+ * the wall face into the room on `towards`'s side, clamped along the wall so
+ * the panel never overhangs an end, and rotated to face into that room.
+ *
+ * The offset survives the 6in placement snap: it is chosen so the snapped
+ * centre still leaves the panel's whole depth inside the room.
+ */
+export function wallMountPlacement(
+  wall: Wall,
+  at: { x: number; y: number },
+  towards: { x: number; y: number },
+  panelWidth: number,
+): { position: { x: number; y: number }; rotation: number } {
+  const dx = wall.end.x - wall.start.x;
+  const dy = wall.end.y - wall.start.y;
+  const length = Math.hypot(dx, dy) || 1;
+  const along = { x: dx / length, y: dy / length };
+  const normal = { x: along.y, y: -along.x };
+
+  // Clamp the click point to where the panel actually fits on the wall.
+  const rawT = (at.x - wall.start.x) * along.x + (at.y - wall.start.y) * along.y;
+  const t = Math.min(Math.max(rawT, panelWidth / 2 + 2), Math.max(length - panelWidth / 2 - 2, panelWidth / 2 + 2));
+  const onWall = { x: wall.start.x + along.x * t, y: wall.start.y + along.y * t };
+
+  const sideDot = (towards.x - onWall.x) * normal.x + (towards.y - onWall.y) * normal.y;
+  const side = sideDot >= 0 ? 1 : -1;
+  const facing = { x: normal.x * side, y: normal.y * side };
+  const offset = wall.thickness / 2 + 4;
+
+  // rotatePoint maps local (0,1) to (-sin, cos), so the rotation that faces
+  // `facing` is atan2(-fx, fy).
+  const rotation = ((Math.atan2(-facing.x, facing.y) * 180) / Math.PI + 360) % 360;
+
+  return {
+    position: { x: onWall.x + facing.x * offset, y: onWall.y + facing.y * offset },
+    rotation,
+  };
+}
+
 export function furniturePlacement(item: Furniture): Placement & { size: Vec3 } {
   const height = furnitureHeight(item.catalogId);
 
