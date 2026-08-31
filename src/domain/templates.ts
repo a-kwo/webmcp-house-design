@@ -15,8 +15,10 @@ export type Template = {
  * through the same generator, so a template is a handful of rectangles and
  * where its doors sit -- not a second way of building plans.
  *
- * Two of the three open clean. The two-bedroom keeps one deliberate violation
- * (a 30in bathroom door) so there is something legible to fix in a demo.
+ * Templates are deliberately unfurnished: furnishing the shell is the work
+ * the human and the agent do together, so shipping it done would hand the
+ * demo's second act to the template. The two-bedroom keeps one deliberate
+ * violation (a 30in bathroom door) so there is something legible to fix.
  */
 export const TEMPLATES: Template[] = [
   {
@@ -36,12 +38,7 @@ export const TEMPLATES: Template[] = [
         { id: 'main-window', kind: 'window', at: { x: 108, y: 0 }, width: 48 },
         { id: 'main-window-2', kind: 'window', at: { x: 0, y: 180 }, width: 36 },
       ],
-      furniture: [
-        { id: 'bed-1', catalogId: 'queen-bed', roomId: 'main', position: { x: 54, y: 168 }, rotation: 0, footprint: { w: 60, d: 80 }, clearanceFront: 24 },
-        { id: 'sofa-1', catalogId: 'sofa', roomId: 'main', position: { x: 126, y: 48 }, rotation: 0, footprint: { w: 84, d: 36 }, clearanceFront: 24 },
-        { id: 'toilet-1', catalogId: 'toilet', roomId: 'bath', position: { x: 234, y: 30 }, rotation: 90, footprint: { w: 18, d: 28 }, clearanceFront: 21 },
-        { id: 'sink-1', catalogId: 'sink', roomId: 'bath', position: { x: 234, y: 84 }, rotation: 90, footprint: { w: 24, d: 20 } },
-      ],
+      furniture: [],
     },
   },
   {
@@ -63,14 +60,7 @@ export const TEMPLATES: Template[] = [
         { id: 'bed1-window', kind: 'window', at: { x: 0, y: 192 }, width: 36 },
         { id: 'living-window', kind: 'window', at: { x: 108, y: 0 }, width: 48 },
       ],
-      furniture: [
-        { id: 'sofa-1', catalogId: 'sofa', roomId: 'living', position: { x: 108, y: 96 }, rotation: 180, footprint: { w: 84, d: 36 }, clearanceFront: 24 },
-        { id: 'range-1', catalogId: 'range', roomId: 'kitchen', position: { x: 246, y: 21 }, rotation: 0, footprint: { w: 30, d: 30 }, clearanceFront: 40 },
-        { id: 'counter-1', catalogId: 'counter', roomId: 'kitchen', position: { x: 291, y: 18 }, rotation: 0, footprint: { w: 60, d: 24 } },
-        { id: 'bed-1', catalogId: 'queen-bed', roomId: 'bed1', position: { x: 126, y: 192 }, rotation: 0, footprint: { w: 60, d: 80 }, clearanceFront: 24 },
-        { id: 'toilet-1', catalogId: 'toilet', roomId: 'bath', position: { x: 210, y: 165 }, rotation: 90, footprint: { w: 18, d: 28 }, clearanceFront: 21 },
-        { id: 'sink-1', catalogId: 'sink', roomId: 'bath', position: { x: 210, y: 219 }, rotation: 90, footprint: { w: 24, d: 20 } },
-      ],
+      furniture: [],
     },
   },
   {
@@ -99,15 +89,7 @@ export const TEMPLATES: Template[] = [
         { id: 'bed1-window', kind: 'window', at: { x: 0, y: 246 }, width: 36 },
         { id: 'bed2-window', kind: 'window', at: { x: 384, y: 216 }, width: 36 },
       ],
-      furniture: [
-        { id: 'sofa-1', catalogId: 'sofa', roomId: 'living', position: { x: 72, y: 72 }, rotation: 0, footprint: { w: 84, d: 36 }, clearanceFront: 24 },
-        { id: 'island-1', catalogId: 'kitchen-island', roomId: 'kitchen', position: { x: 264, y: 78 }, rotation: 0, footprint: { w: 72, d: 36 }, clearanceFront: 42 },
-        { id: 'range-1', catalogId: 'range', roomId: 'kitchen', position: { x: 360, y: 54 }, rotation: 90, footprint: { w: 30, d: 30 }, clearanceFront: 40 },
-        { id: 'toilet-1', catalogId: 'toilet', roomId: 'bath', position: { x: 192, y: 198 }, rotation: 90, footprint: { w: 18, d: 28 }, clearanceFront: 21 },
-        { id: 'sink-1', catalogId: 'sink', roomId: 'bath', position: { x: 192, y: 274 }, rotation: 90, footprint: { w: 24, d: 20 } },
-        { id: 'bed-1', catalogId: 'queen-bed', roomId: 'bed1', position: { x: 60, y: 252 }, rotation: 0, footprint: { w: 60, d: 80 }, clearanceFront: 24 },
-        { id: 'bed-2', catalogId: 'queen-bed', roomId: 'bed2', position: { x: 324, y: 220 }, rotation: 0, footprint: { w: 60, d: 80 }, clearanceFront: 24 },
-      ],
+      furniture: [],
     },
   },
 ];

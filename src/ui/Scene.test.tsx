@@ -35,6 +35,9 @@ function Harness() {
 beforeEach(() => {
   floorplanStore.setState({ templateId: 'two-bed', templateChosen: false });
   floorplanStore.getState().reset();
+  // Templates ship unfurnished; these tests exercise clearance and furniture
+  // behaviour, so they run against the furnished two-bed fixture.
+  floorplanStore.setState({ plan: JSON.parse(JSON.stringify(sampleFloorplan)) });
 });
 
 afterEach(() => {

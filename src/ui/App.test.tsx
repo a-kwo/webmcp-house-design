@@ -3,6 +3,7 @@ import { StrictMode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { moveWall } from '../domain/operations';
+import { sampleFloorplan } from '../domain/sampleFloorplan';
 import { floorplanStore } from '../state/floorplanStore';
 import { App } from './App';
 
@@ -44,6 +45,9 @@ function installContext() {
 beforeEach(() => {
   floorplanStore.setState({ templateId: 'two-bed', templateChosen: false });
   floorplanStore.getState().reset();
+  // Templates ship unfurnished; these tests exercise clearance and furniture
+  // behaviour, so they run against the furnished two-bed fixture.
+  floorplanStore.setState({ plan: JSON.parse(JSON.stringify(sampleFloorplan)) });
 });
 
 afterEach(() => {

@@ -6,7 +6,12 @@ import { floorplanStore } from './floorplanStore';
 const store = floorplanStore;
 
 beforeEach(() => {
+  // reset() honours whichever template a previous test started from; pin the
+  // fixture, then furnish it -- templates ship unfurnished and several tests
+  // exercise selection and clearance behaviour that needs furniture.
+  store.setState({ templateId: 'two-bed', templateChosen: false });
   store.getState().reset();
+  store.setState({ plan: JSON.parse(JSON.stringify(sampleFloorplan)) });
 });
 
 describe('applyOperation', () => {

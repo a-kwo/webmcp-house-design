@@ -50,13 +50,18 @@ describe('templates', () => {
     }
   });
 
+  it('ships every template unfurnished', () => {
+    // Furnishing the shell is the work the human and agent do together.
+    for (const template of TEMPLATES) {
+      expect(buildTemplate(template.id).furniture).toEqual([]);
+    }
+  });
+
   it('hands out a fresh plan each build, never a shared one', () => {
     const first = buildTemplate('studio');
-    first.furniture[0].position.x = -999;
     first.walls[0].start.x = -999;
 
     const second = buildTemplate('studio');
-    expect(second.furniture[0].position.x).not.toBe(-999);
     expect(second.walls[0].start.x).not.toBe(-999);
   });
 });

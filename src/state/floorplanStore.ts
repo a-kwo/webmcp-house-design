@@ -1,7 +1,6 @@
 import { createStore } from 'zustand/vanilla';
 import { useStore } from 'zustand';
 import type { OperationResult } from '../domain/operations';
-import { sampleFloorplan } from '../domain/sampleFloorplan';
 import { DEFAULT_TEMPLATE_ID, TEMPLATES, buildTemplate, templateById } from '../domain/templates';
 import type { Floorplan, Violation } from '../domain/types';
 import { validate } from '../domain/validate';
@@ -84,7 +83,7 @@ function pushUndo(stack: Floorplan[], plan: Floorplan): Floorplan[] {
 }
 
 export const floorplanStore = createStore<FloorplanState>()((set, get) => ({
-  plan: sampleFloorplan,
+  plan: buildTemplate(DEFAULT_TEMPLATE_ID),
   selection: { elementIds: [], kind: null },
   camera: { mode: 'iso', targetRoomId: null, description: 'Looking down at the whole plan from the south-east.' },
   undoStack: [],

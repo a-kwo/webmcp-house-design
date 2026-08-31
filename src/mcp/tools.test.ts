@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
+import { sampleFloorplan } from '../domain/sampleFloorplan';
 import { floorplanStore } from '../state/floorplanStore';
 import { registerFloorplanTools } from './tools';
 
@@ -41,6 +42,9 @@ async function setup() {
   // fixture so every test sees the two-bedroom sample.
   floorplanStore.setState({ templateId: 'two-bed', templateChosen: false });
   floorplanStore.getState().reset();
+  // Templates ship unfurnished; these tests exercise clearance and furniture
+  // behaviour, so they run against the furnished two-bed fixture.
+  floorplanStore.setState({ plan: JSON.parse(JSON.stringify(sampleFloorplan)) });
   const context = fakeContext();
   const dispose = await registerFloorplanTools(context);
   const call = (name: string, input: unknown = {}) => context.tools.get(name)!.execute(input);
