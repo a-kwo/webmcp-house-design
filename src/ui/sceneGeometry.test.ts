@@ -10,6 +10,7 @@ import {
   cameraPose,
   changedWalls,
   proposedWalls,
+  rotationTowards,
   furnitureHeight,
   furniturePlacement,
   openingPlacement,
@@ -235,6 +236,26 @@ describe('furniturePlacement', () => {
     for (const item of CATALOG) {
       expect(FURNITURE_HEIGHT_IN[item.id], item.id).toBeDefined();
     }
+  });
+});
+
+describe('rotationTowards', () => {
+  it('faces the four compass points', () => {
+    const centre = { x: 100, y: 100 };
+    expect(rotationTowards(centre, { x: 100, y: 160 })).toBe(0);
+    expect(rotationTowards(centre, { x: 40, y: 100 })).toBe(90);
+    expect(rotationTowards(centre, { x: 100, y: 40 })).toBe(180);
+    expect(rotationTowards(centre, { x: 160, y: 100 })).toBe(270);
+  });
+
+  it('snaps to 5 degrees so hand-set angles stay tidy', () => {
+    const centre = { x: 0, y: 0 };
+    const loose = rotationTowards(centre, { x: -3, y: 60 });
+    expect(loose % 5).toBe(0);
+  });
+
+  it('holds still on a degenerate point', () => {
+    expect(rotationTowards({ x: 5, y: 5 }, { x: 5, y: 5 })).toBe(0);
   });
 });
 

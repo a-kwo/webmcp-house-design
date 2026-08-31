@@ -48,6 +48,8 @@ export type Furniture = {
   rotation: number;
   footprint: { w: number; d: number };
   clearanceFront?: number;
+  /** Tint for the piece's primary surfaces; unset means the default look. */
+  color?: string;
 };
 
 export type Floorplan = {

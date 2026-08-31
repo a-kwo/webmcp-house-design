@@ -5,7 +5,7 @@ import type { ThreeEvent } from '@react-three/fiber';
 import * as THREE from 'three';
 import { catalogItem } from '../domain/catalog';
 import { moveFurniture, placeFurniture } from '../domain/operations';
-import { boundingBox, roomPolygon } from '../domain/geometry';
+import { boundingBox, facingVector, roomPolygon } from '../domain/geometry';
 import { FurnitureModel } from './FurnitureModel';
 import { TEXTURE_SPAN_IN, surfaceTextures } from './textures';
 import { validate } from '../domain/validate';
@@ -18,7 +18,9 @@ import {
   cameraPose,
   planBounds,
   proposedWalls,
+  furnitureHeight,
   furniturePlacement,
+  rotationTowards,
   openingPlacement,
   wallMountPlacement,
   wallPanelRects,
@@ -88,18 +90,20 @@ function RoomFloor({
 }) {
   const selected = useSelected(room.id);
   const selectRoom = useSelect(room.id);
-  const armedCatalogId = useFloorplanStore((state) => state.armedCatalogId);
+  const armed = useFloorplanStore((state) => state.armed);
   const armCatalog = useFloorplanStore((state) => state.armCatalog);
   const applyOperation = useFloorplanStore((state) => state.applyOperation);
   const select = useFloorplanStore((state) => state.select);
 
   // An armed palette item turns the next floor click into a placement -- the
   // click's world point becomes the piece's centre, through the same operation
-  // the agent's place_furniture uses.
+  // the agent's place_furniture uses, carrying whatever finish was chosen.
   const onClick = (event: ThreeEvent<MouseEvent>) => {
-    const armed = armedCatalogId ? catalogItem(armedCatalogId) : undefined;
-    if (!armed) {
-      selectRoom(event);
+    const item = armed ? catalogItem(armed.catalogId) : undefined;
+    if (!item) {
+      if (!selectSuppressed()) {
+        selectRoom(event);
+      }
       return;
     }
 
@@ -107,10 +111,11 @@ function RoomFloor({
     const result = applyOperation((current) =>
       placeFurniture(current, {
         roomId: room.id,
-        catalogId: armed.id,
-        footprint: { w: armed.w, d: armed.d },
+        catalogId: item.id,
+        footprint: { w: item.w, d: item.d },
         position: { x: event.point.x, y: event.point.z },
-        ...(armed.clearanceFront === undefined ? {} : { clearanceFrontIn: armed.clearanceFront }),
+        ...(item.clearanceFront === undefined ? {} : { clearanceFrontIn: item.clearanceFront }),
+        ...(armed?.color === undefined ? {} : { color: armed.color }),
       }),
     );
 
@@ -169,7 +174,7 @@ function RoomFloor({
 function WallPanel({ plan, wall, wallHeight }: { plan: Floorplan; wall: Wall; wallHeight: number }) {
   const selected = useSelected(wall.id);
   const selectWall = useSelect(wall.id);
-  const armedCatalogId = useFloorplanStore((state) => state.armedCatalogId);
+  const armed = useFloorplanStore((state) => state.armed);
   const armCatalog = useFloorplanStore((state) => state.armCatalog);
   const applyOperation = useFloorplanStore((state) => state.applyOperation);
   const select = useFloorplanStore((state) => state.select);
@@ -179,8 +184,10 @@ function WallPanel({ plan, wall, wallHeight }: { plan: Floorplan; wall: Wall; wa
   // facing into the room the viewer is looking from. Every other armed item
   // stands on floors, so walls keep their select behaviour.
   const onClick = (event: ThreeEvent<MouseEvent>) => {
-    if (armedCatalogId !== 'tv-stand') {
-      selectWall(event);
+    if (armed?.catalogId !== 'tv-stand') {
+      if (!selectSuppressed()) {
+        selectWall(event);
+      }
       return;
     }
 
@@ -209,6 +216,7 @@ function WallPanel({ plan, wall, wallHeight }: { plan: Floorplan; wall: Wall; wa
         position: mount.position,
         rotation: mount.rotation,
         clearanceFrontIn: 60,
+        ...(armed.color === undefined ? {} : { color: armed.color }),
       }),
     );
 
@@ -386,6 +394,22 @@ function DoorLeaf({ opening, width, height }: { opening: Opening; width: number;
   );
 }
 
+/**
+ * The click that follows a drag or a ring-turn lands on whatever is under the
+ * released pointer -- usually a floor -- and would steal the selection from
+ * the piece that was just manipulated. Gestures push this deadline forward on
+ * release; select-clicks inside it are the gesture's echo, not an intent.
+ */
+let suppressSelectUntil = 0;
+
+export function suppressNextSelect(): void {
+  suppressSelectUntil = Date.now() + 250;
+}
+
+function selectSuppressed(): boolean {
+  return Date.now() < suppressSelectUntil;
+}
+
 /** Where a pointer ray meets the floor plane, in plan inches. */
 function floorPoint(event: ThreeEvent<PointerEvent>): { x: number; y: number } | null {
   const { origin, direction } = event.ray;
@@ -414,6 +438,7 @@ function FurniturePiece({ item }: { item: Furniture }) {
   // Pointer capture inside the scene graph proved unreliable, and a drag must
   // survive the cursor crossing walls, other furniture, or leaving the canvas.
   const [dragPosition, setDragPosition] = useState<{ x: number; y: number } | null>(null);
+  const [rotationPreview, setRotationPreview] = useState<number | null>(null);
   const drag = useRef({ active: false, moved: false, offset: { x: 0, y: 0 }, at: { x: 0, y: 0 } });
 
   const mouseToFloor = (clientX: number, clientY: number): { x: number; y: number } | null => {
@@ -481,6 +506,7 @@ function FurniturePiece({ item }: { item: Furniture }) {
         // A rejected landing spot leaves the store untouched, so clearing the
         // preview snaps the piece back to where it really is.
         applyOperation((plan) => moveFurniture(plan, { furnitureId: item.id, position: drag.current.at }));
+        suppressNextSelect();
       }
       setDragPosition(null);
     };
@@ -494,17 +520,111 @@ function FurniturePiece({ item }: { item: Furniture }) {
     : placement.position;
 
   return (
-    <FurnitureModel
-      catalogId={item.catalogId}
-      position={shown}
-      rotationY={placement.rotationY}
-      w={placement.size[0]}
-      h={placement.size[1]}
-      d={placement.size[2]}
-      selected={selected || dragPosition !== null}
-      onClick={onClick}
-      onPointerDown={onPointerDown}
-    />
+    <>
+      <FurnitureModel
+        catalogId={item.catalogId}
+        position={shown}
+        rotationY={rotationPreview !== null ? (-rotationPreview * Math.PI) / 180 : placement.rotationY}
+        w={placement.size[0]}
+        h={placement.size[1]}
+        d={placement.size[2]}
+        selected={selected || dragPosition !== null}
+        tint={item.color}
+        onClick={onClick}
+        onPointerDown={onPointerDown}
+      />
+      {selected && dragPosition === null && item.catalogId !== 'tv-wall' ? (
+        <RotateHandle
+          item={item}
+          preview={rotationPreview}
+          onPreview={setRotationPreview}
+          onCommit={(rotation) =>
+            applyOperation((plan) => moveFurniture(plan, { furnitureId: item.id, rotation }))
+          }
+          controls={controls}
+          mouseToFloor={mouseToFloor}
+        />
+      ) : null}
+    </>
+  );
+}
+
+/**
+ * A ring around the selected piece with a knob at its front. Dragging the knob
+ * turns the piece to face the pointer -- any angle, snapped to 5deg -- and
+ * commits one move_furniture on release, the same call an agent would make.
+ * The quarter-turn button stays for the common case; this is for the rest.
+ */
+function RotateHandle({
+  item,
+  preview,
+  onPreview,
+  onCommit,
+  controls,
+  mouseToFloor,
+}: {
+  item: Furniture;
+  preview: number | null;
+  onPreview: (rotation: number | null) => void;
+  onCommit: (rotation: number) => void;
+  controls: { enabled: boolean } | null;
+  mouseToFloor: (clientX: number, clientY: number) => { x: number; y: number } | null;
+}) {
+  const radius = Math.hypot(item.footprint.w, item.footprint.d) / 2 + 9;
+  const shownRotation = preview ?? item.rotation;
+  const front = facingVector(shownRotation);
+  // The knob floats above the piece's own height: at floor level its pixels
+  // sit behind the body from most angles, and grabbing it grabbed the piece.
+  const knob: [number, number, number] = [
+    item.position.x + front.x * radius,
+    furnitureHeight(item.catalogId) + 6,
+    item.position.y + front.y * radius,
+  ];
+
+  const onPointerDown = (event: ThreeEvent<PointerEvent>) => {
+    event.stopPropagation();
+    if (controls) {
+      controls.enabled = false;
+    }
+    onPreview(item.rotation);
+    let latest = item.rotation;
+
+    const onMove = (move: PointerEvent) => {
+      const at = mouseToFloor(move.clientX, move.clientY);
+      if (!at) {
+        return;
+      }
+      latest = rotationTowards(item.position, at);
+      onPreview(latest);
+    };
+
+    const onUp = () => {
+      window.removeEventListener('pointermove', onMove);
+      if (controls) {
+        controls.enabled = true;
+      }
+      if (latest !== item.rotation) {
+        onCommit(latest);
+      }
+      onPreview(null);
+      suppressNextSelect();
+    };
+
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp, { once: true });
+  };
+
+  return (
+    <group>
+      <mesh position={[item.position.x, 1, item.position.y]} rotation={[-Math.PI / 2, 0, 0]}>
+        <torusGeometry args={[radius, 0.7, 8, 48]} />
+        <meshBasicMaterial color="#6ea8fe" transparent opacity={0.55} depthWrite={false} />
+      </mesh>
+      <mesh position={knob} onPointerDown={onPointerDown} renderOrder={10}>
+        <sphereGeometry args={[4.5, 16, 16]} />
+        <meshBasicMaterial color="#9cc2ff" depthTest={false} />
+      </mesh>
+    </group>
   );
 }
 
@@ -640,7 +760,9 @@ function Ground({ plan, onClear }: { plan: Floorplan; onClear: () => void }) {
       receiveShadow
       onClick={(event) => {
         event.stopPropagation();
-        onClear();
+        if (!selectSuppressed()) {
+          onClear();
+        }
       }}
     >
       <planeGeometry args={[6000, 6000]} />
@@ -824,7 +946,13 @@ export function Scene() {
         shadows="soft"
         camera={{ fov: 50, near: 1, far: 5000, position: [500, 400, 500] }}
         gl={{ toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.1 }}
-        onPointerMissed={() => clearSelection()}
+        onPointerMissed={() => {
+          // A gesture's release often mismatches its press target, which r3f
+          // reports as a miss; that echo must not clear the selection.
+          if (!selectSuppressed()) {
+            clearSelection();
+          }
+        }}
       >
         <color attach="background" args={['#171818']} />
         {/* Distance fade folds the ground's edge into the background instead

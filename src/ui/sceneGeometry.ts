@@ -242,6 +242,24 @@ export function wallMountPlacement(
   };
 }
 
+/**
+ * The rotation that turns a piece's front toward `point`, for the rotate
+ * handle: drag the knob anywhere and the piece faces it. Snapped to 5deg so
+ * hand-set angles stay tidy without feeling stepped.
+ */
+export function rotationTowards(centre: { x: number; y: number }, point: { x: number; y: number }, snap = 5): number {
+  const fx = point.x - centre.x;
+  const fy = point.y - centre.y;
+  if (Math.hypot(fx, fy) < 0.001) {
+    return 0;
+  }
+
+  // rotatePoint maps local (0,1) to (-sin, cos), so facing (fx, fy) means a
+  // rotation of atan2(-fx, fy).
+  const degrees = ((Math.atan2(-fx, fy) * 180) / Math.PI + 360) % 360;
+  return snap > 0 ? Math.round(degrees / snap) * snap % 360 : degrees;
+}
+
 export function furniturePlacement(item: Furniture): Placement & { size: Vec3 } {
   const height = furnitureHeight(item.catalogId);
 

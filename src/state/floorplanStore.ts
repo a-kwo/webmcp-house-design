@@ -47,12 +47,12 @@ export type FloorplanState = {
   templateId: string;
   /** False until someone -- human or agent -- picks a starting point. */
   templateChosen: boolean;
-  /** Catalog item armed in the palette; the next floor click places it. */
-  armedCatalogId: string | null;
+  /** Palette item armed for placement, with any chosen finish. */
+  armed: { catalogId: string; color?: string } | null;
 
   applyOperation: (operation: (plan: Floorplan) => OperationResult) => ToolEnvelope;
   loadTemplate: (templateId: string) => ToolEnvelope;
-  armCatalog: (catalogId: string | null) => void;
+  armCatalog: (catalogId: string | null, color?: string) => void;
   select: (elementIds: string[]) => void;
   clearSelection: () => void;
   setCamera: (camera: Partial<Camera>) => void;
@@ -90,7 +90,7 @@ export const floorplanStore = createStore<FloorplanState>()((set, get) => ({
   variants: [],
   templateId: DEFAULT_TEMPLATE_ID,
   templateChosen: false,
-  armedCatalogId: null,
+  armed: null,
 
   applyOperation: (operation) => {
     const previous = get().plan;
@@ -129,7 +129,7 @@ export const floorplanStore = createStore<FloorplanState>()((set, get) => ({
       undoStack: [],
       variants: [],
       selection: { elementIds: [], kind: null },
-      armedCatalogId: null,
+      armed: null,
     });
 
     return {
@@ -140,7 +140,8 @@ export const floorplanStore = createStore<FloorplanState>()((set, get) => ({
     };
   },
 
-  armCatalog: (catalogId) => set({ armedCatalogId: catalogId }),
+  armCatalog: (catalogId, color) =>
+    set({ armed: catalogId === null ? null : { catalogId, ...(color === undefined ? {} : { color }) } }),
 
   select: (elementIds) => {
     const plan = get().plan;
@@ -216,7 +217,7 @@ export const floorplanStore = createStore<FloorplanState>()((set, get) => ({
       camera: { mode: 'iso', targetRoomId: null, description: 'Looking down at the whole plan from the south-east.' },
       undoStack: [],
       variants: [],
-      armedCatalogId: null,
+      armed: null,
     })),
 }));
 

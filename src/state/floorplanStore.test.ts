@@ -175,14 +175,19 @@ describe('templates', () => {
 describe('palette arming', () => {
   it('arms one catalog item at a time and disarms on template load', () => {
     floorplanStore.getState().armCatalog('sofa');
-    expect(floorplanStore.getState().armedCatalogId).toBe('sofa');
+    expect(floorplanStore.getState().armed).toEqual({ catalogId: 'sofa' });
 
     floorplanStore.getState().armCatalog(null);
-    expect(floorplanStore.getState().armedCatalogId).toBeNull();
+    expect(floorplanStore.getState().armed).toBeNull();
 
     floorplanStore.getState().armCatalog('table');
     floorplanStore.getState().loadTemplate('one-bed');
-    expect(floorplanStore.getState().armedCatalogId).toBeNull();
+    expect(floorplanStore.getState().armed).toBeNull();
+  });
+
+  it('carries the chosen finish with the armed item', () => {
+    floorplanStore.getState().armCatalog('sofa', '#46536b');
+    expect(floorplanStore.getState().armed).toEqual({ catalogId: 'sofa', color: '#46536b' });
   });
 });
 

@@ -447,6 +447,7 @@ export function placeFurniture(
     position?: Point;
     rotation?: number;
     clearanceFrontIn?: number;
+    color?: string;
   },
 ): OperationResult {
   const room = plan.rooms.find((candidate) => candidate.id === input.roomId);
@@ -503,6 +504,7 @@ export function placeFurniture(
     rotation,
     footprint: input.footprint,
     ...(input.clearanceFrontIn === undefined ? {} : { clearanceFront: input.clearanceFrontIn }),
+    ...(input.color === undefined ? {} : { color: input.color }),
   };
 
   next.furniture.push(item);
