@@ -108,7 +108,7 @@ const schemas = {
   }),
   place_furniture: z.object({
     roomId: z.string(),
-    catalogId: z.string().describe('Catalog key, e.g. "queen-bed", "sofa", "toilet".'),
+    catalogId: z.string().describe('Catalog key: queen-bed, sofa, tv-stand, table, bookshelf, chair, nightstand, dresser, wardrobe, desk, kitchen-island, counter, range, fridge, toilet, sink, tub, shower, washer, tv-wall (a wall-mounted screen: place just off a wall, rotated to face the room). Other ids render as a plain block.'),
     footprint: z.object({ w: z.number(), d: z.number() }).describe('Plan footprint in inches.'),
     position: z.object({ x: z.number(), y: z.number() }).optional()
       .describe('Omit to auto-place against the most sensible wall.'),

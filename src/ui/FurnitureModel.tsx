@@ -22,6 +22,8 @@ const CUSHION = '#b6aa92';
 const PORCELAIN = '#e9e7e2';
 const STEEL = '#9fa3a7';
 const COUNTER = '#d8d2c6';
+const SCREEN = '#1c1e22';
+const GLASS = '#b9d2dd';
 
 type ModelProps = {
   w: number;
@@ -145,6 +147,156 @@ function Range({ w, d, h }: ModelProps) {
   );
 }
 
+function Television({ w, d, h }: ModelProps) {
+  const cabinet = h * 0.42;
+
+  return (
+    <>
+      <Part y={cabinet / 2} sx={w} sy={cabinet} sz={d} color={DARK_WOOD} />
+      {/* Panel leans against the back edge; the screen faces +z, the front. */}
+      <Part z={-d * 0.15} y={cabinet + h * 0.28} sx={w * 0.82} sy={h * 0.52} sz={2} color={SCREEN} roughness={0.25} />
+      <Part z={-d * 0.15} y={cabinet + h * 0.04} sx={w * 0.2} sy={h * 0.06} sz={d * 0.4} color={STEEL} />
+    </>
+  );
+}
+
+function Fridge({ w, d, h }: ModelProps) {
+  const split = h * 0.68;
+
+  return (
+    <>
+      <Part y={h / 2} sx={w} sy={h} sz={d} color={STEEL} roughness={0.35} />
+      {/* Freezer seam and two door handles on the +z face. */}
+      <Part z={d / 2 + 0.2} y={split} sx={w * 0.96} sy={1} sz={0.8} color="#7d8184" />
+      <Part x={w * 0.32} z={d / 2 + 1.2} y={split + h * 0.12} sx={1.5} sy={h * 0.2} sz={1.5} color="#c9cccf" roughness={0.25} />
+      <Part x={w * 0.32} z={d / 2 + 1.2} y={split - h * 0.16} sx={1.5} sy={h * 0.24} sz={1.5} color="#c9cccf" roughness={0.25} />
+    </>
+  );
+}
+
+function Desk({ w, d, h }: ModelProps) {
+  return (
+    <>
+      <Part y={h - 1} sx={w} sy={2} sz={d} color={WOOD} roughness={0.6} />
+      <Part x={-w / 2 + 1.5} y={(h - 2) / 2} sx={3} sy={h - 2} sz={d * 0.9} color={DARK_WOOD} />
+      <Part x={w / 2 - 1.5} y={(h - 2) / 2} sx={3} sy={h - 2} sz={d * 0.9} color={DARK_WOOD} />
+    </>
+  );
+}
+
+function Chair({ w, d, h }: ModelProps) {
+  const seat = h * 0.55;
+
+  return (
+    <>
+      <Part y={seat} sx={w} sy={2.5} sz={d} color={WOOD} />
+      <Part z={-d / 2 + 1} y={seat + h * 0.28} sx={w} sy={h * 0.5} sz={2} color={WOOD} />
+      {[-1, 1].flatMap((sx) =>
+        [-1, 1].map((sz) => (
+          <Part key={`${sx}${sz}`} x={sx * (w / 2 - 1.2)} z={sz * (d / 2 - 1.2)} y={seat / 2} sx={2} sy={seat} sz={2} color={DARK_WOOD} />
+        )),
+      )}
+    </>
+  );
+}
+
+function Bookshelf({ w, d, h }: ModelProps) {
+  const shelves = 4;
+
+  return (
+    <>
+      <Part z={-d / 2 + 0.6} y={h / 2} sx={w} sy={h} sz={1.2} color={DARK_WOOD} />
+      <Part x={-w / 2 + 1} y={h / 2} sx={2} sy={h} sz={d} color={WOOD} />
+      <Part x={w / 2 - 1} y={h / 2} sx={2} sy={h} sz={d} color={WOOD} />
+      <Part y={h - 1} sx={w} sy={2} sz={d} color={WOOD} />
+      {Array.from({ length: shelves }, (_, index) => (
+        <Part key={index} y={((index + 0.5) / shelves) * (h - 2)} sx={w - 4} sy={1.5} sz={d - 1} color={WOOD} />
+      ))}
+    </>
+  );
+}
+
+function Nightstand({ w, d, h }: ModelProps) {
+  return (
+    <>
+      <Part y={h / 2} sx={w} sy={h} sz={d} color={WOOD} />
+      <Part z={d / 2 + 0.3} y={h * 0.68} sx={w * 0.8} sy={h * 0.28} sz={0.8} color={DARK_WOOD} />
+      <Part z={d / 2 + 1} y={h * 0.68} sx={w * 0.3} sy={1.2} sz={1.2} color={STEEL} roughness={0.3} />
+    </>
+  );
+}
+
+function Wardrobe({ w, d, h }: ModelProps) {
+  return (
+    <>
+      <Part y={h / 2} sx={w} sy={h} sz={d} color={WOOD} />
+      {/* Centre seam and a handle either side of it. */}
+      <Part z={d / 2 + 0.2} y={h / 2} sx={0.8} sy={h * 0.96} sz={0.8} color={DARK_WOOD} />
+      <Part x={-w * 0.06} z={d / 2 + 1} y={h * 0.52} sx={1.2} sy={h * 0.16} sz={1.2} color={STEEL} roughness={0.3} />
+      <Part x={w * 0.06} z={d / 2 + 1} y={h * 0.52} sx={1.2} sy={h * 0.16} sz={1.2} color={STEEL} roughness={0.3} />
+    </>
+  );
+}
+
+function Tub({ w, d, h }: ModelProps) {
+  return (
+    <>
+      <Part y={h / 2} sx={w} sy={h} sz={d} color={PORCELAIN} roughness={0.35} />
+      {/* The basin: a darker inset below the rim. */}
+      <Part y={h - 1} sx={w - 6} sy={1.4} sz={d - 6} color="#cfccc4" roughness={0.3} />
+      <Part y={h - 0.4} sx={w} sy={1} sz={d} color={PORCELAIN} roughness={0.3} />
+    </>
+  );
+}
+
+function Shower({ w, d, h }: ModelProps) {
+  return (
+    <>
+      <Part y={2} sx={w} sy={4} sz={d} color={PORCELAIN} roughness={0.4} />
+      {/* Glass on the two open sides; the back corner is against the walls. */}
+      <mesh position={[0, h / 2 + 2, d / 2 - 0.5]} castShadow>
+        <boxGeometry args={[w, h - 4, 1]} />
+        <meshStandardMaterial color={GLASS} transparent opacity={0.25} roughness={0.05} />
+      </mesh>
+      <mesh position={[w / 2 - 0.5, h / 2 + 2, 0]} castShadow>
+        <boxGeometry args={[1, h - 4, d]} />
+        <meshStandardMaterial color={GLASS} transparent opacity={0.25} roughness={0.05} />
+      </mesh>
+      <Part z={-d / 2 + 2} y={h * 0.9} sx={2} sy={2} sz={8} color={STEEL} roughness={0.25} />
+    </>
+  );
+}
+
+function Washer({ w, d, h }: ModelProps) {
+  return (
+    <>
+      <Part y={h / 2} sx={w} sy={h} sz={d} color="#e3e1dc" roughness={0.4} />
+      {/* Porthole door on the front. */}
+      <mesh position={[0, h * 0.48, d / 2 + 0.4]} rotation={[Math.PI / 2, 0, 0]}>
+        <cylinderGeometry args={[w * 0.3, w * 0.3, 1.2, 24]} />
+        <meshStandardMaterial color={SCREEN} roughness={0.2} />
+      </mesh>
+      <Part y={h - 2} z={d / 2 + 0.2} sx={w * 0.9} sy={3} sz={0.8} color="#b9b6b0" />
+    </>
+  );
+}
+
+/**
+ * A wall-mounted screen: no cabinet, hung high with a bracket behind it. The
+ * panel occupies the top 30in of the item's height, so h = 74 puts the screen
+ * from 44in to 74in -- eye height from a sofa.
+ */
+function WallTelevision({ w, h }: ModelProps) {
+  const panel = 30;
+
+  return (
+    <>
+      <Part z={-1} y={h - panel / 2} sx={w} sy={panel} sz={2} color={SCREEN} roughness={0.2} />
+      <Part z={-2.2} y={h - panel / 2} sx={w * 0.2} sy={panel * 0.4} sz={2} color={STEEL} />
+    </>
+  );
+}
+
 function Generic({ w, d, h }: ModelProps) {
   return <Part y={h / 2} sx={w} sy={h} sz={d} color={FABRIC} />;
 }
@@ -162,6 +314,24 @@ const MODELS: Record<string, (props: ModelProps) => JSX.Element> = {
   counter: Island,
   range: Range,
   dishwasher: Range,
+  'tv-stand': Television,
+  tv: Television,
+  'tv-wall': WallTelevision,
+  fridge: Fridge,
+  refrigerator: Fridge,
+  desk: Desk,
+  chair: Chair,
+  bookshelf: Bookshelf,
+  nightstand: Nightstand,
+  dresser: Nightstand,
+  wardrobe: Wardrobe,
+  closet: Wardrobe,
+  tub: Tub,
+  bath: Tub,
+  bathtub: Tub,
+  shower: Shower,
+  washer: Washer,
+  dryer: Washer,
 };
 
 /**

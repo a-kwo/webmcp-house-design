@@ -31,7 +31,7 @@ const ADJACENCY_TOLERANCE_IN = 1;
 
 const SQ_IN_PER_SQ_FT = 144;
 
-const plumbingCatalogIds = new Set(['toilet', 'sink', 'shower', 'tub', 'bath', 'vanity', 'dishwasher']);
+const plumbingCatalogIds = new Set(['toilet', 'sink', 'shower', 'tub', 'bath', 'vanity', 'dishwasher', 'washer']);
 
 /**
  * `previous` lets the structural rule see edits rather than guess from the

@@ -40,7 +40,7 @@ export type Placement = { position: Vec3; rotationY: number };
 
 export type CameraPose = { position: Vec3; target: Vec3 };
 
-const FURNITURE_HEIGHT_IN: Record<string, number> = {
+export const FURNITURE_HEIGHT_IN: Record<string, number> = {
   'queen-bed': 24,
   sofa: 32,
   chair: 32,
@@ -53,6 +53,18 @@ const FURNITURE_HEIGHT_IN: Record<string, number> = {
   range: 36,
   dishwasher: 34,
   table: 30,
+  'tv-stand': 44,
+  fridge: 70,
+  desk: 30,
+  bookshelf: 72,
+  nightstand: 24,
+  dresser: 34,
+  wardrobe: 78,
+  washer: 38,
+  counter: 36,
+  // Mounted panel: its model hangs the screen high on the wall, so the height
+  // is the top of the panel, not a box sitting on the floor.
+  'tv-wall': 74,
 };
 
 const DEFAULT_FURNITURE_HEIGHT_IN = 30;
