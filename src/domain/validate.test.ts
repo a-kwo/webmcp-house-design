@@ -199,6 +199,20 @@ describe('fixture and clearance rules', () => {
     expect(violation?.message).toContain('two-cook');
   });
 
+  it('treats a sub-grid gap as a cabinetry seam, not an aisle', () => {
+    // A 30in stove and a 60in counter on the 6in grid can never actually
+    // touch -- their closest legal spacing is a 3in seam nobody walks in.
+    const tight = tightKitchen(288);
+    const seam = clonePlan(tight);
+    // island at 288 (252-324); park the range 3in away at 342? Use existing
+    // pieces: island(288) vs range(360, rot90 spans 345-375): gap 21 -> error.
+    expect(find(tight, 'KITCHEN_AISLE')?.severity).toBe('error');
+
+    // Close it to a 3in seam: range centre 342 -> spans 327-357, gap 3.
+    seam.furniture.find((item) => item.id === 'range-1')!.position = { x: 342, y: 54 };
+    expect(find(seam, 'KITCHEN_AISLE')).toBeUndefined();
+  });
+
   it('clears a kitchen whose aisles are comfortable', () => {
     const plan = clonePlan(sampleFloorplan);
     plan.furniture.find((item) => item.id === 'range-1')!.position = { x: 420, y: 54 };

@@ -165,16 +165,24 @@ function envelope(result: ToolEnvelope): ToolEnvelope {
 }
 
 function summarise(plan: Floorplan) {
-  return computeRoomSummaries(plan).map((room) => ({
-    id: room.id,
-    name: room.name,
-    type: room.type,
-    areaSqFt: Math.round(room.areaSqFt),
-    adjacentRoomIds: room.adjacentRoomIds,
-    ...(room.marginAboveMinimumSqFt === null
-      ? {}
-      : { marginAboveMinimumSqFt: Math.round(room.marginAboveMinimumSqFt) }),
-  }));
+  return computeRoomSummaries(plan).map((room) => {
+    // Bounds ride in the summary so placing furniture needs no second call:
+    // an agent asked to put a bed against a wall has the wall right here.
+    const source = plan.rooms.find((candidate) => candidate.id === room.id)!;
+    const box = boundingBox(roomPolygon(plan, source));
+
+    return {
+      id: room.id,
+      name: room.name,
+      type: room.type,
+      areaSqFt: Math.round(room.areaSqFt),
+      boundsIn: { minX: box.minX, minY: box.minY, maxX: box.maxX, maxY: box.maxY },
+      adjacentRoomIds: room.adjacentRoomIds,
+      ...(room.marginAboveMinimumSqFt === null
+        ? {}
+        : { marginAboveMinimumSqFt: Math.round(room.marginAboveMinimumSqFt) }),
+    };
+  });
 }
 
 /** Describes the selection in the terms the agent needs to act on it. */

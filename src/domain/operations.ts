@@ -514,8 +514,8 @@ export function placeFurniture(
     plan: next,
     changed: [id, room.id],
     summary: input.position
-      ? `Placed ${input.catalogId} (${id}) in ${room.name}.`
-      : `Placed ${input.catalogId} (${id}) against a wall in ${room.name}.`,
+      ? `Placed ${input.catalogId} (${id}) in ${room.name} at (${position.x}, ${position.y}).`
+      : `Placed ${input.catalogId} (${id}) against a wall in ${room.name} at (${position.x}, ${position.y}).`,
   };
 }
 
@@ -583,9 +583,12 @@ export function moveFurniture(
     ok: true,
     plan: next,
     changed: [item.id, room.id, ...(rehomed ? [previousRoom] : [])],
+    // Echo where it actually landed: the grid snap can quietly shift a
+    // requested position, and a caller that cannot see that will conclude
+    // its fix silently failed.
     summary: rehomed
-      ? `Moved ${item.catalogId} ${item.id} into ${room.name}.`
-      : `Moved ${item.catalogId} ${item.id} within ${room.name}.`,
+      ? `Moved ${item.catalogId} ${item.id} into ${room.name}, now at (${position.x}, ${position.y}).`
+      : `Moved ${item.catalogId} ${item.id} within ${room.name}, now at (${position.x}, ${position.y}).`,
   };
 }
 

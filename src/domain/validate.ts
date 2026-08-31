@@ -204,7 +204,10 @@ function validateKitchenAisles(plan: Floorplan): Violation[] {
     const kitchenFurniture = plan.furniture.filter((item) => item.roomId === kitchen.id);
     const aisles = pairwise(kitchenFurniture)
       .map(([a, b]) => ({ a, b, gap: polygonGap(furniturePolygon(a), furniturePolygon(b)) }))
-      .filter((aisle) => aisle.gap > 0)
+      // A gap under the 6in grid step is a cabinetry seam, not an aisle
+      // anyone walks in -- and mismatched widths on the grid often cannot
+      // close it to zero at all.
+      .filter((aisle) => aisle.gap >= GRID_IN)
       .sort((first, second) => first.gap - second.gap);
 
     const tightest = aisles[0];

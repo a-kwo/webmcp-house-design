@@ -139,6 +139,13 @@ describe('read tools', () => {
     expect(call('get_selection').elements[0].bordersRooms.sort()).toEqual(['Bedroom 2', 'Hallway']);
   });
 
+  it('gives the summary enough to place furniture without the full dump', async () => {
+    const { call } = await setup();
+    const bed1 = call('get_layout').rooms.find((room: { id: string }) => room.id === 'bed1');
+
+    expect(bed1.boundsIn).toEqual({ minX: 0, minY: 180, maxX: 132, maxY: 300 });
+  });
+
   it('computes areas and a total', async () => {
     const { call } = await setup();
     const result = call('compute_areas', { roomIds: ['living', 'kitchen'] });

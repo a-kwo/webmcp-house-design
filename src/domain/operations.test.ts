@@ -324,6 +324,9 @@ describe('moveFurniture', () => {
     expect(sofa.position).toEqual({ x: 102, y: 96 });
     expect(sofa.roomId).toBe('living');
     expect(result.summary).toContain('within Living Room');
+    // The landed position rides in the summary: the snap can shift a request,
+    // and the caller must see where the piece really is.
+    expect(result.summary).toContain('(102, 96)');
   });
 
   it('re-homes a piece dropped in a different room', () => {
