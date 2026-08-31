@@ -24,17 +24,18 @@ export const TEMPLATES: Template[] = [
   {
     id: 'studio',
     name: 'Studio',
-    description: 'One open room with a bathroom and a closet. 432 sq ft.',
+    description: 'One open room with a full bath and laundry. 450 sq ft.',
     spec: {
       rooms: [
         { id: 'main', name: 'Studio', type: 'living', x: 0, y: 0, w: 216, d: 216 },
-        { id: 'bath', name: 'Bathroom', type: 'bathroom', x: 216, y: 0, w: 72, d: 108, wetWalls: ['W'] },
-        { id: 'closet', name: 'Closet', type: 'closet', x: 216, y: 108, w: 72, d: 108 },
+        // A 7ft column: a real full bath up top, laundry and storage below.
+        { id: 'bath', name: 'Bathroom', type: 'bathroom', x: 216, y: 0, w: 84, d: 96, wetWalls: ['W'] },
+        { id: 'closet', name: 'Laundry', type: 'utility', x: 216, y: 96, w: 84, d: 120, wetWalls: ['W'] },
       ],
       openings: [
         { id: 'entry', kind: 'door', at: { x: 0, y: 108 }, width: 36, swing: 'in-left' },
-        { id: 'main-bath', kind: 'door', at: { x: 216, y: 54 }, width: 32, swing: 'out-right' },
-        { id: 'main-closet', kind: 'door', at: { x: 216, y: 162 }, width: 32, swing: 'out-left' },
+        { id: 'main-bath', kind: 'door', at: { x: 216, y: 48 }, width: 32, swing: 'out-right' },
+        { id: 'main-closet', kind: 'door', at: { x: 216, y: 156 }, width: 32, swing: 'out-left' },
         { id: 'main-window', kind: 'window', at: { x: 108, y: 0 }, width: 48 },
         { id: 'main-window-2', kind: 'window', at: { x: 0, y: 180 }, width: 36 },
       ],
@@ -44,20 +45,24 @@ export const TEMPLATES: Template[] = [
   {
     id: 'one-bed',
     name: 'One Bedroom',
-    description: 'Living room, kitchen, bedroom and bath. 560 sq ft.',
+    description: 'Living room, kitchen, bedroom, ensuite bath and laundry. 588 sq ft.',
     spec: {
       rooms: [
         { id: 'living', name: 'Living Room', type: 'living', x: 0, y: 0, w: 216, d: 144 },
         { id: 'kitchen', name: 'Kitchen', type: 'kitchen', x: 216, y: 0, w: 120, d: 144 },
-        { id: 'bed1', name: 'Bedroom', type: 'bedroom', x: 0, y: 144, w: 192, d: 96 },
-        { id: 'bath', name: 'Bathroom', type: 'bathroom', x: 192, y: 144, w: 144, d: 96, wetWalls: ['W'] },
+        // A 9ft-deep lower row: a queen bed wants 3ft of walkway, not 16in.
+        { id: 'bed1', name: 'Bedroom', type: 'bedroom', x: 0, y: 144, w: 168, d: 108 },
+        { id: 'bath', name: 'Bathroom', type: 'bathroom', x: 168, y: 144, w: 84, d: 108, wetWalls: ['W'] },
+        { id: 'laundry', name: 'Laundry', type: 'utility', x: 252, y: 144, w: 84, d: 108, wetWalls: ['W'] },
       ],
       openings: [
         { id: 'entry', kind: 'door', at: { x: 0, y: 72 }, width: 36, swing: 'in-left' },
         { id: 'living-kitchen', kind: 'archway', at: { x: 216, y: 72 }, width: 60, height: 84, swing: 'none' },
         { id: 'living-bed1', kind: 'door', at: { x: 60, y: 144 }, width: 32, swing: 'in-right' },
-        { id: 'kitchen-bath', kind: 'door', at: { x: 264, y: 144 }, width: 32, swing: 'in-left' },
-        { id: 'bed1-window', kind: 'window', at: { x: 0, y: 192 }, width: 36 },
+        // The bath is an ensuite off the bedroom; laundry hangs off the kitchen.
+        { id: 'bed1-bath', kind: 'door', at: { x: 168, y: 198 }, width: 32, swing: 'in-left' },
+        { id: 'kitchen-laundry', kind: 'door', at: { x: 294, y: 144 }, width: 32, swing: 'in-left' },
+        { id: 'bed1-window', kind: 'window', at: { x: 0, y: 198 }, width: 36 },
         { id: 'living-window', kind: 'window', at: { x: 108, y: 0 }, width: 48 },
       ],
       furniture: [],
