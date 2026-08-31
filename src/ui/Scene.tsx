@@ -5,6 +5,7 @@ import type { ThreeEvent } from '@react-three/fiber';
 import * as THREE from 'three';
 import { roomPolygon } from '../domain/geometry';
 import { FurnitureModel } from './FurnitureModel';
+import { TEXTURE_SPAN_IN, surfaceTextures } from './textures';
 import { validate } from '../domain/validate';
 import type { Floorplan, Furniture, Opening, Room, RoomType, Wall } from '../domain/types';
 import { describeCamera } from '../mcp/tools';
@@ -24,7 +25,7 @@ import {
 const SELECTED = '#6ea8fe';
 const WALL_COLOR = '#cfc9bd';
 const GHOST = '#d8a657';
-const CEILING_COLOR = '#4a4742';
+const CEILING_COLOR = '#b3ada1';
 const TRIM_COLOR = '#efe9dd';
 
 const FLOOR_COLORS: Record<RoomType, string> = {
@@ -37,6 +38,22 @@ const FLOOR_COLORS: Record<RoomType, string> = {
   closet: '#35353a',
   utility: '#333a33',
   garage: '#31312f',
+};
+
+/** Wet and work rooms read as tiled; everything else as boarded. */
+const TILED: Set<RoomType> = new Set(['bathroom', 'kitchen', 'utility', 'garage']);
+
+/** A faint per-room tint over the shared floor texture, so rooms stay told apart. */
+const FLOOR_TINTS: Record<RoomType, string> = {
+  bedroom: '#dfe4f2',
+  bathroom: '#ffffff',
+  kitchen: '#fff3e4',
+  living: '#f2ede2',
+  dining: '#f4e8ee',
+  hallway: '#e8e4da',
+  closet: '#e2dfd8',
+  utility: '#e4ece4',
+  garage: '#dcdcda',
 };
 
 function useSelected(id: string): boolean {
@@ -83,6 +100,19 @@ function RoomFloor({
     return null;
   }
 
+  // Textured when a 2D canvas exists to draw one; the flat colour otherwise.
+  const map = ceiling === undefined && !selected
+    ? (TILED.has(room.type) ? surfaceTextures().tile : surfaceTextures().wood)
+    : null;
+
+  const color = ceiling !== undefined
+    ? CEILING_COLOR
+    : selected
+      ? SELECTED
+      : map
+        ? FLOOR_TINTS[room.type]
+        : FLOOR_COLORS[room.type];
+
   return (
     <mesh
       geometry={geometry}
@@ -93,9 +123,10 @@ function RoomFloor({
     >
       {/* The shape's normal points down once laid flat, so light both faces. */}
       <meshStandardMaterial
-        color={ceiling === undefined ? (selected ? SELECTED : FLOOR_COLORS[room.type]) : CEILING_COLOR}
+        color={color}
+        map={map}
         side={THREE.DoubleSide}
-        roughness={0.95}
+        roughness={TILED.has(room.type) ? 0.55 : 0.9}
       />
     </mesh>
   );
@@ -129,8 +160,36 @@ function WallPanel({ plan, wall, wallHeight }: { plan: Floorplan; wall: Wall; wa
     return new THREE.ExtrudeGeometry(shape, { depth: wall.thickness, bevelEnabled: false });
   }, [plan, wall, wallHeight]);
 
+  // Baseboard runs: the wall's length minus every floor-level opening.
+  const skirtRuns = useMemo(() => {
+    const doorSpans = wallPanelRects(plan, wall, wallHeight)
+      .holes.filter((hole) => hole.y < 4)
+      .sort((a, b) => a.x - b.x);
+
+    const runs: { from: number; to: number }[] = [];
+    let cursor = 0;
+    for (const span of doorSpans) {
+      if (span.x - cursor > 2) {
+        runs.push({ from: cursor, to: span.x });
+      }
+      cursor = Math.max(cursor, span.x + span.w);
+    }
+    if (placement.length - cursor > 2) {
+      runs.push({ from: cursor, to: placement.length });
+    }
+    return runs;
+  }, [plan, wall, wallHeight, placement.length]);
+
   return (
     <group position={placement.position} rotation={[0, placement.rotationY, 0]}>
+      {skirtRuns.map((run) =>
+        [wall.thickness / 2 + 0.7, -wall.thickness / 2 - 0.7].map((z) => (
+          <mesh key={`${run.from}-${z}`} position={[(run.from + run.to) / 2, 2, z]} receiveShadow>
+            <boxGeometry args={[run.to - run.from, 4, 1.4]} />
+            <meshStandardMaterial color={TRIM_COLOR} roughness={0.6} />
+          </mesh>
+        )),
+      )}
       {/* Extrusion runs along local +z, so back it off to straddle the line. */}
       <mesh geometry={geometry} position={[0, 0, -wall.thickness / 2]} onClick={onClick} castShadow receiveShadow>
         {/* Both rooms draw a shared partition, so the two panels are coplanar.
@@ -138,6 +197,7 @@ function WallPanel({ plan, wall, wallHeight }: { plan: Floorplan; wall: Wall; wa
             against its twin. */}
         <meshStandardMaterial
           color={selected ? SELECTED : WALL_COLOR}
+          map={selected ? null : surfaceTextures().plaster}
           roughness={0.85}
           side={THREE.DoubleSide}
           polygonOffset={selected}
@@ -211,6 +271,36 @@ function OpeningPane({
           <meshStandardMaterial color={TRIM_COLOR} roughness={0.6} />
         </mesh>
       ) : null}
+      <DoorLeaf opening={opening} width={placement.width} height={placement.height} />
+    </group>
+  );
+}
+
+/**
+ * The door itself, standing ajar on its hinge. The swing data already says
+ * which jamb it hangs from and which way it opens, so the leaf is pure
+ * decoration derived from state the constraint engine uses anyway. Sliding
+ * and fixed openings have no leaf to show.
+ */
+function DoorLeaf({ opening, width, height }: { opening: Opening; width: number; height: number }) {
+  const swing = opening.swing;
+  if (opening.kind !== 'door' || !swing || swing === 'sliding' || swing === 'none') {
+    return null;
+  }
+
+  const hingedLeft = swing.endsWith('left');
+  const inward = swing.startsWith('in');
+  const hingeX = hingedLeft ? -width / 2 : width / 2;
+  // Ajar at ~55deg: open enough to read as a door, closed enough not to fill
+  // the room. Sign chosen so the leaf sweeps toward the side the arc sweeps.
+  const angle = (hingedLeft ? 1 : -1) * (inward ? 1 : -1) * 0.95;
+
+  return (
+    <group position={[hingeX, 0, 0]} rotation={[0, angle, 0]}>
+      <mesh position={[hingedLeft ? width / 2 : -width / 2, 0, 0]} castShadow>
+        <boxGeometry args={[width, height, 1.6]} />
+        <meshStandardMaterial color="#cfc8ba" roughness={0.65} />
+      </mesh>
     </group>
   );
 }
@@ -351,6 +441,31 @@ export function VariantBar({
 }
 
 /**
+ * A large soft ground under the building, so the plan sits somewhere rather
+ * than floating in a void, and the sun has something to throw the house's
+ * shadow onto. Clicking it is clicking empty space.
+ */
+function Ground({ plan, onClear }: { plan: Floorplan; onClear: () => void }) {
+  const bounds = planBounds(plan);
+  const centre = { x: (bounds.minX + bounds.maxX) / 2, z: (bounds.minY + bounds.maxY) / 2 };
+
+  return (
+    <mesh
+      position={[centre.x, -0.4, centre.z]}
+      rotation={[-Math.PI / 2, 0, 0]}
+      receiveShadow
+      onClick={(event) => {
+        event.stopPropagation();
+        onClear();
+      }}
+    >
+      <planeGeometry args={[6000, 6000]} />
+      <meshStandardMaterial color="#26271f" roughness={1} />
+    </mesh>
+  );
+}
+
+/**
  * Late-morning daylight: one shadow-casting sun from the south-east, a cool
  * sky/warm ground hemisphere for ambient, and a faint warm bounce from the
  * north-west so shadowed faces are lifted rather than black. Everything is
@@ -368,6 +483,10 @@ function Daylight({ plan }: { plan: Floorplan }) {
 
   return (
     <>
+      {/* Hemisphere light ignores surfaces facing straight down, so ceiling
+          undersides went black in the walkthrough; a whisper of flat ambient
+          keeps them readable without flattening the shadows. */}
+      <ambientLight intensity={0.18} color="#d8d2c4" />
       <hemisphereLight args={['#cfd8e6', '#5a5248', 0.9]} />
       <directionalLight
         position={[centre.x + reach * 0.8, reach * 1.4, centre.z + reach * 0.6]}
@@ -469,8 +588,12 @@ export function Scene() {
         gl={{ toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.1 }}
         onPointerMissed={() => clearSelection()}
       >
-        <color attach="background" args={['#151515']} />
+        <color attach="background" args={['#171818']} />
+        {/* Distance fade folds the ground's edge into the background instead
+            of ending it at a visible horizon line. */}
+        <fog attach="fog" args={['#171818', 1400, 4200]} />
         <Daylight plan={plan} />
+        <Ground plan={plan} onClear={clearSelection} />
 
         {plan.rooms.map((room) => (
           <RoomFloor key={room.id} plan={plan} room={room} />

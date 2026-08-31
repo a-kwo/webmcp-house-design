@@ -1,3 +1,4 @@
+import { RoundedBox } from '@react-three/drei';
 import type { ThreeEvent } from '@react-three/fiber';
 
 /**
@@ -48,11 +49,14 @@ function Part({
   color: string;
   roughness?: number;
 }) {
+  // Bevelled corners are most of the difference between furniture and
+  // packing crates; the radius is capped so thin parts stay slab-shaped.
+  const radius = Math.min(1.2, sx / 2, sy / 2, sz / 2) * 0.8;
+
   return (
-    <mesh position={[x, y, z]} castShadow receiveShadow>
-      <boxGeometry args={[sx, sy, sz]} />
+    <RoundedBox position={[x, y, z]} args={[sx, sy, sz]} radius={radius} smoothness={3} castShadow receiveShadow>
       <meshStandardMaterial color={color} roughness={roughness} />
-    </mesh>
+    </RoundedBox>
   );
 }
 
