@@ -200,7 +200,8 @@ export function furniturePlacement(item: Furniture): Placement & { size: Vec3 } 
   };
 }
 
-function planBounds(plan: Floorplan) {
+/** The plan's extent in world space, for fitting a shadow camera to it. */
+export function planBounds(plan: Floorplan) {
   const points = plan.rooms.flatMap((room) => roomPolygon(plan, room));
 
   if (points.length === 0) {
