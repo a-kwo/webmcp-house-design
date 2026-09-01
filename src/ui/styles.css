@@ -137,6 +137,14 @@ code {
   padding-left: 10px;
 }
 
+.camera-hint {
+  border-left: 1px solid #343434;
+  color: #8f897d;
+  font-size: 12px;
+  padding-left: 10px;
+  white-space: nowrap;
+}
+
 .left-rail li {
   cursor: pointer;
 }

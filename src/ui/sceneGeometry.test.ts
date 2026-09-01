@@ -9,6 +9,9 @@ import {
   FURNITURE_HEIGHT_IN,
   cameraPose,
   changedWalls,
+  lookDrag,
+  panStep,
+  walkStep,
   proposedWalls,
   rotationTowards,
   furnitureHeight,
@@ -351,5 +354,109 @@ describe('cameraPose', () => {
     // Backed up against the living room's west end, looking east at the kitchen.
     expect(pose.position[0]).toBeLessThan(108);
     expect(pose.target[0]).toBeGreaterThan(pose.position[0]);
+  });
+});
+
+describe('street-view walkthrough math', () => {
+  // Standing at the origin at eye height, looking level along -Z; +X is the
+  // viewer's right.
+  const gaze = { position: [0, 60, 0] as [number, number, number], target: [0, 60, -60] as [number, number, number] };
+
+  it('walks forward along the gaze without changing eye height', () => {
+    const next = walkStep(gaze, 1, 0, 0.5, 100);
+
+    expect(next.position[2]).toBeCloseTo(-50);
+    expect(next.position[0]).toBeCloseTo(0);
+    expect(next.position[1]).toBe(60);
+    // The look target rides along, still 60in ahead.
+    expect(next.target[2]).toBeCloseTo(-110);
+  });
+
+  it('walks backward on the down arrow', () => {
+    const next = walkStep(gaze, -1, 0, 0.5, 100);
+    expect(next.position[2]).toBeCloseTo(50);
+  });
+
+  it('turns the view right on +turn', () => {
+    const next = walkStep(gaze, 0, 1, 0.1);
+
+    // Facing -Z, right is +X: the target should swing that way.
+    expect(next.target[0]).toBeGreaterThan(0.1);
+    expect(next.position).toEqual(gaze.position);
+  });
+
+  it('stays on the floor plane even when the gaze tilts up', () => {
+    const up = { position: gaze.position, target: [0, 100, -40] as [number, number, number] };
+    const next = walkStep(up, 1, 0, 1, 100);
+
+    expect(next.position[1]).toBe(60);
+    expect(next.position[2]).toBeCloseTo(-100);
+    // The tilt survives the step.
+    expect(next.target[1]).toBeCloseTo(100);
+  });
+
+  it('drag left sweeps the view right, like grabbing a panorama', () => {
+    const target = lookDrag(gaze, -100, 0);
+    expect(target[0]).toBeGreaterThan(0.1);
+  });
+
+  it('drag down tilts the view up and clamps short of the pole', () => {
+    expect(lookDrag(gaze, 0, 40)[1]).toBeGreaterThan(60);
+    // A wild fling still cannot cross overhead.
+    const flung = lookDrag(gaze, 0, 100000);
+    expect(flung[1]).toBeLessThan(60 + 60);
+  });
+
+  it('keeps the look distance constant through drags', () => {
+    const target = lookDrag(gaze, 87, -33);
+    const dist = Math.hypot(target[0], target[1] - 60, target[2]);
+    expect(dist).toBeCloseTo(60);
+  });
+});
+
+describe('overhead panning math', () => {
+  // An iso-style camera: high up, south-east of its target, looking down at it.
+  const iso = { position: [300, 340, 300] as [number, number, number], target: [0, 0, 0] as [number, number, number] };
+
+  it('slides camera and target together, keeping height and view angle', () => {
+    const next = panStep(iso, 0, 1, 0.1);
+
+    const dx = next.position[0] - iso.position[0];
+    const dz = next.position[2] - iso.position[2];
+    expect(next.position[1]).toBe(340);
+    expect(next.target[1]).toBe(0);
+    // Same slide for both, so the framing is preserved.
+    expect(next.target[0] - iso.target[0]).toBeCloseTo(dx);
+    expect(next.target[2] - iso.target[2]).toBeCloseTo(dz);
+    // Screen-up moves toward the target's horizontal direction: -x, -z here.
+    expect(dx).toBeLessThan(0);
+    expect(dz).toBeLessThan(0);
+  });
+
+  it('strafes right perpendicular to the view', () => {
+    const north = { position: [0, 340, 300] as [number, number, number], target: [0, 0, 0] as [number, number, number] };
+    const next = panStep(north, 1, 0, 0.1);
+
+    // Looking toward -z, screen-right is +x.
+    expect(next.position[0]).toBeGreaterThan(1);
+    expect(next.position[2]).toBeCloseTo(300);
+  });
+
+  it('pans faster the further out the camera sits', () => {
+    const near = { position: [0, 100, 60] as [number, number, number], target: [0, 0, 0] as [number, number, number] };
+    const far = { position: [0, 1000, 600] as [number, number, number], target: [0, 0, 0] as [number, number, number] };
+
+    const nearStep = Math.abs(panStep(near, 1, 0, 0.1).position[0]);
+    const farStep = Math.abs(panStep(far, 1, 0, 0.1).position[0]);
+    expect(farStep).toBeGreaterThan(nearStep);
+  });
+
+  it('still pans when looking straight down', () => {
+    const top = { position: [50, 500, 50] as [number, number, number], target: [50, 0, 50] as [number, number, number] };
+    const next = panStep(top, 0, 1, 0.1);
+
+    // Screen-up defaults to plan north (-z).
+    expect(next.position[2]).toBeLessThan(50);
+    expect(next.position[0]).toBeCloseTo(50);
   });
 });

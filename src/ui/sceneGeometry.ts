@@ -262,6 +262,114 @@ export function rotationTowards(centre: { x: number; y: number }, point: { x: nu
   return snap > 0 ? Math.round(degrees / snap) * snap % 360 : degrees;
 }
 
+/**
+ * Street-view walkthrough math, kept pure so the sign conventions -- the part
+ * of camera code that always goes wrong -- are testable without a renderer.
+ *
+ * The eye stands at `position` looking at `target`. Angles follow three.js
+ * Spherical: theta = atan2(x, z) about +Y, phi measured down from +Y, so a
+ * level gaze has phi = PI/2. Facing -Z, +X is to the viewer's right.
+ */
+
+const LOOK_PITCH_MIN = Math.PI * 0.2;
+const LOOK_PITCH_MAX = Math.PI * 0.85;
+
+type Gaze = { position: Vec3; target: Vec3 };
+
+function gazeSpherical(gaze: Gaze) {
+  const [px, py, pz] = gaze.position;
+  const [tx, ty, tz] = gaze.target;
+  const x = tx - px;
+  const y = ty - py;
+  const z = tz - pz;
+  const radius = Math.hypot(x, y, z) || 1;
+  return { radius, theta: Math.atan2(x, z), phi: Math.acos(Math.min(1, Math.max(-1, y / radius))) };
+}
+
+function gazeTarget(gaze: Gaze, radius: number, theta: number, phi: number): Vec3 {
+  return [
+    gaze.position[0] + radius * Math.sin(phi) * Math.sin(theta),
+    gaze.position[1] + radius * Math.cos(phi),
+    gaze.position[2] + radius * Math.sin(phi) * Math.cos(theta),
+  ];
+}
+
+/**
+ * Grab-the-panorama look: drag left, the view sweeps right; drag down, it
+ * tilts up. Returns the new look target; the eye never moves. Pitch is
+ * clamped short of the poles, where the up vector flips.
+ */
+export function lookDrag(gaze: Gaze, dx: number, dy: number, speed = 0.0032): Vec3 {
+  const { radius, theta, phi } = gazeSpherical(gaze);
+  const clamped = Math.min(LOOK_PITCH_MAX, Math.max(LOOK_PITCH_MIN, phi - dy * speed));
+  return gazeTarget(gaze, radius, theta + dx * speed, clamped);
+}
+
+/**
+ * One frame of walking: `move` is +1 forward / -1 back, `turn` +1 right / -1
+ * left. Movement follows the gaze but stays on the floor plane -- looking at
+ * the ceiling must not fly the eye upward -- and eye height never changes.
+ */
+export function walkStep(
+  gaze: Gaze,
+  move: number,
+  turn: number,
+  dt: number,
+  speedIn = 130,
+  turnSpeed = 1.7,
+): Gaze {
+  const { radius, theta, phi } = gazeSpherical(gaze);
+  const nextTheta = theta - turn * turnSpeed * dt;
+
+  let position = gaze.position;
+  if (move !== 0) {
+    const aheadX = Math.sin(phi) * Math.sin(nextTheta);
+    const aheadZ = Math.sin(phi) * Math.cos(nextTheta);
+    const length = Math.hypot(aheadX, aheadZ);
+    if (length > 1e-6) {
+      const step = (move * speedIn * dt) / length;
+      position = [position[0] + aheadX * step, position[1], position[2] + aheadZ * step];
+    }
+  }
+
+  return {
+    position,
+    target: gazeTarget({ position, target: gaze.target }, radius, nextTheta, phi),
+  };
+}
+
+/**
+ * One frame of overhead panning: the maps gesture, for the top and iso views.
+ * `strafe` is +1 right / -1 left, `advance` +1 screen-up / -1 screen-down.
+ * The camera and its target slide together across the floor plane -- height
+ * and view angle never change -- and the rate scales with how far the camera
+ * sits from its target, so panning feels the same zoomed out or in close.
+ */
+export function panStep(gaze: Gaze, strafe: number, advance: number, dt: number): Gaze {
+  const [px, py, pz] = gaze.position;
+  const [tx, ty, tz] = gaze.target;
+
+  let fx = tx - px;
+  let fz = tz - pz;
+  const flat = Math.hypot(fx, fz);
+  if (flat < 1e-6) {
+    // Looking straight down; screen-up defaults to plan north.
+    fx = 0;
+    fz = -1;
+  } else {
+    fx /= flat;
+    fz /= flat;
+  }
+
+  const distance = Math.hypot(tx - px, ty - py, tz - pz);
+  const step = Math.max(150, distance * 0.5) * dt;
+  // Screen-right on the floor is the forward direction turned a quarter right.
+  const ox = (fx * advance - fz * strafe) * step;
+  const oz = (fz * advance + fx * strafe) * step;
+
+  return { position: [px + ox, py, pz + oz], target: [tx + ox, ty, tz + oz] };
+}
+
 export function furniturePlacement(item: Furniture): Placement & { size: Vec3 } {
   const height = furnitureHeight(item.catalogId);
 

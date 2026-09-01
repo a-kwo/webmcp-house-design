@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { Edges, Environment, Html, Lightformer, OrbitControls } from '@react-three/drei';
-import { EffectComposer, N8AO, SMAA, Vignette } from '@react-three/postprocessing';
+import { Bloom, EffectComposer, N8AO, SMAA, Vignette } from '@react-three/postprocessing';
 import type { ThreeEvent } from '@react-three/fiber';
 import * as THREE from 'three';
 import { catalogItem } from '../domain/catalog';
@@ -17,16 +17,20 @@ import type { Camera, CameraMode, Variant } from '../state/floorplanStore';
 import {
   DOLLHOUSE_WALL_HEIGHT_IN,
   cameraPose,
+  lookDrag,
+  panStep,
   planBounds,
   proposedWalls,
-  furnitureHeight,
   furniturePlacement,
   rotationTowards,
   openingPlacement,
+  walkStep,
   wallMountPlacement,
   wallPanelRects,
   wallPlacement,
 } from './sceneGeometry';
+
+type Vec3Tuple = [number, number, number];
 
 const SELECTED = '#6ea8fe';
 const WALL_COLOR = '#cfc9bd';
@@ -141,9 +145,15 @@ function RoomFloor({
   }
 
   // Textured when a 2D canvas exists to draw one; the flat colour otherwise.
-  const map = ceiling === undefined && !selected
-    ? (TILED.has(room.type) ? surfaceTextures().tile : surfaceTextures().wood)
-    : null;
+  const tiled = TILED.has(room.type);
+  const surfaces = surfaceTextures();
+  const map = selected
+    ? null
+    : ceiling !== undefined
+      ? surfaces.plaster
+      : tiled
+        ? surfaces.tile
+        : surfaces.wood;
 
   const color = ceiling !== undefined
     ? CEILING_COLOR
@@ -161,13 +171,28 @@ function RoomFloor({
       onClick={ceiling === undefined ? onClick : undefined}
       receiveShadow
     >
-      {/* The shape's normal points down once laid flat, so light both faces. */}
-      <meshStandardMaterial
+      {/* The shape's normal points down once laid flat, so light both faces.
+          Physical material for the finish coat: honed tile and sealed boards
+          both carry a clear layer whose tight reflections are most of what
+          separates a photo of a floor from a diagram of one. Bump relief
+          (seams, grout, grain) gives the raking light something to catch. */}
+      <meshPhysicalMaterial
         color={color}
         map={map}
-        roughnessMap={map ? (TILED.has(room.type) ? surfaceTextures().tileRough : surfaceTextures().woodRough) : null}
+        roughnessMap={map ? (ceiling !== undefined ? surfaces.plasterRough : tiled ? surfaces.tileRough : surfaces.woodRough) : null}
+        bumpMap={map ? (ceiling !== undefined ? surfaces.plasterBump : tiled ? surfaces.tileBump : surfaces.woodBump) : null}
+        bumpScale={tiled ? 0.6 : 0.35}
+        clearcoat={ceiling !== undefined || map === null ? 0 : tiled ? 0.55 : 0.3}
+        clearcoatRoughness={tiled ? 0.25 : 0.5}
+        envMapIntensity={ceiling !== undefined ? 0.2 : 0.55}
+        {...(ceiling !== undefined
+          // Faces straight down, which the hemisphere light ignores and the sun
+          // never reaches: a whisper of self-light stands in for floor bounce,
+          // without which the ceiling reads as a black lid on every room.
+          ? { emissive: '#a49d8f' as unknown as THREE.Color, emissiveIntensity: 0.55 }
+          : {})}
         side={THREE.DoubleSide}
-        roughness={map ? 1 : TILED.has(room.type) ? 0.55 : 0.9}
+        roughness={map ? 1 : tiled ? 0.55 : 0.9}
       />
     </mesh>
   );
@@ -290,6 +315,9 @@ function WallPanel({ plan, wall, wallHeight }: { plan: Floorplan; wall: Wall; wa
           color={selected ? SELECTED : WALL_COLOR}
           map={selected ? null : surfaceTextures().plaster}
           roughnessMap={selected ? null : surfaceTextures().plasterRough}
+          bumpMap={selected ? null : surfaceTextures().plasterBump}
+          bumpScale={0.25}
+          envMapIntensity={0.25}
           roughness={selected ? 0.85 : 1}
           side={THREE.DoubleSide}
           polygonOffset={selected}
@@ -334,12 +362,16 @@ function OpeningPane({
       <mesh onClick={onClick}>
         <boxGeometry args={[placement.width, placement.height, wall.thickness * 0.35]} />
         {/* Doors and archways read as voids, so their pane is only a click
-            target with the faintest tint; windows get actual glass. */}
-        <meshStandardMaterial
-          color={selected ? SELECTED : glazed ? '#9fc4d8' : '#6f6a60'}
+            target with the faintest tint; windows get actual glass -- near
+            zero roughness and a strong environment pickup, so panes catch
+            the sky the way real glazing does. */}
+        <meshPhysicalMaterial
+          color={selected ? SELECTED : glazed ? '#b8d4e4' : '#6f6a60'}
           transparent
-          opacity={selected ? 0.75 : glazed ? 0.35 : 0.12}
-          roughness={0.1}
+          opacity={selected ? 0.75 : glazed ? 0.3 : 0.12}
+          roughness={glazed ? 0.04 : 0.1}
+          metalness={0}
+          envMapIntensity={glazed ? 2.2 : 0.3}
         />
       </mesh>
       {/* Casing: jambs up the sides, a head across the top, and a sill under a
@@ -531,13 +563,13 @@ function FurniturePiece({ item, wallHeight }: { item: Furniture; wallHeight: num
     ? [dragPosition.x, placement.position[1], dragPosition.y]
     : placement.position;
 
-  // A mounted panel hangs at eye height, but the overhead views cut walls to
-  // 42in -- drawn at its true height it floats above the stub instead of
-  // sitting on the wall face. Squash it onto whatever wall is visible; the
-  // walkthrough shows full walls, so there it hangs where it really is.
-  const height = item.catalogId === 'tv-wall'
-    ? Math.max(26, Math.min(placement.size[1], wallHeight - 3))
-    : placement.size[1];
+  // Overhead views are a dollhouse: walls are cut to 48in, and any piece drawn
+  // at its true height pokes above the cut and reads as oversized. One rule
+  // for every piece -- fit under the cut in the overhead views, true height in
+  // the walkthrough, where wallHeight is the real ceiling. Special-casing only
+  // the wall TV made it the one piece that behaved differently, which read as
+  // a bug rather than a convention.
+  const height = Math.min(placement.size[1], wallHeight - 2);
 
   return (
     <>
@@ -579,6 +611,7 @@ function FurniturePiece({ item, wallHeight }: { item: Furniture; wallHeight: num
       {selected && dragPosition === null && item.catalogId !== 'tv-wall' && cameraMode !== 'firstPerson' ? (
         <RotateHandle
           item={item}
+          height={height}
           preview={rotationPreview}
           onPreview={setRotationPreview}
           onCommit={(rotation) =>
@@ -600,6 +633,7 @@ function FurniturePiece({ item, wallHeight }: { item: Furniture; wallHeight: num
  */
 function RotateHandle({
   item,
+  height,
   preview,
   onPreview,
   onCommit,
@@ -607,6 +641,8 @@ function RotateHandle({
   mouseToFloor,
 }: {
   item: Furniture;
+  /** The piece's rendered height in the current view, not its true height. */
+  height: number;
   preview: number | null;
   onPreview: (rotation: number | null) => void;
   onCommit: (rotation: number) => void;
@@ -620,7 +656,7 @@ function RotateHandle({
   // sit behind the body from most angles, and grabbing it grabbed the piece.
   const knob: [number, number, number] = [
     item.position.x + front.x * radius,
-    furnitureHeight(item.catalogId) + 6,
+    height + 6,
     item.position.y + front.y * radius,
   ];
 
@@ -671,18 +707,33 @@ function RotateHandle({
   );
 }
 
+/** Inches walked per second when a movement key is held. */
+const WALK_SPEED_IN = 130;
+/** Radians turned per second on the left/right arrows. */
+const TURN_SPEED = 1.7;
+/** Radians of view swing per pixel of look-drag. */
+const LOOK_SPEED = 0.0032;
+
 /**
  * Eases the camera to whatever pose the store asks for, then hands control back
  * to the orbit controls. Tracking the pose in a ref rather than an effect
  * dependency means a re-render mid-flight does not restart the move.
+ *
+ * The walkthrough gets street-view controls instead of the orbit gesture:
+ * dragging grabs the panorama (drag left, the view sweeps right), the arrow
+ * keys or WASD walk and turn, and eye height never changes. Orbit's own
+ * rotate/zoom/pan are disabled there -- orbiting around a target 60in in
+ * front of your nose is what made the walkthrough feel broken.
  */
 function CameraRig({ plan, camera }: { plan: Floorplan; camera: Camera }) {
   const controls = useRef<React.ElementRef<typeof OrbitControls>>(null);
-  const { camera: three } = useThree();
+  const { camera: three, gl } = useThree();
+  const walking = camera.mode === 'firstPerson';
 
   const pose = useMemo(() => cameraPose(plan, camera), [plan, camera]);
   const from = useRef({ position: new THREE.Vector3(), target: new THREE.Vector3() });
   const progress = useRef(1);
+  const keys = useRef(new Set<string>());
 
   useEffect(() => {
     from.current.position.copy(three.position);
@@ -690,21 +741,144 @@ function CameraRig({ plan, camera }: { plan: Floorplan; camera: Camera }) {
     progress.current = 0;
   }, [pose, three]);
 
+  // A standing eye wants a wide lens: 50deg is right for surveying the plan
+  // from outside, but inside a 12ft room it reads as a telephoto crop and the
+  // room feels smaller than its measurements. ~72deg is what map walkthroughs
+  // use, and it is what makes the dimensions feel true at eye height.
+  useEffect(() => {
+    const lens = three as THREE.PerspectiveCamera;
+    lens.fov = walking ? 72 : 50;
+    lens.updateProjectionMatrix();
+  }, [walking, three]);
+
+  // Movement keys, live in every view: the walkthrough walks, the overhead
+  // views pan. Held state lives in a ref and is consumed per-frame, so
+  // movement is smooth rather than stepping at the key-repeat rate.
+  useEffect(() => {
+    const handled = new Set(['arrowup', 'arrowdown', 'arrowleft', 'arrowright', 'w', 'a', 's', 'd']);
+    const held = keys.current;
+
+    const onDown = (event: KeyboardEvent) => {
+      const key = event.key.toLowerCase();
+      if (!handled.has(key) || event.metaKey || event.ctrlKey || event.altKey) {
+        return;
+      }
+      // Without this the arrows also scroll the page behind the canvas.
+      event.preventDefault();
+      held.add(key);
+    };
+    const onUp = (event: KeyboardEvent) => held.delete(event.key.toLowerCase());
+
+    window.addEventListener('keydown', onDown);
+    window.addEventListener('keyup', onUp);
+    return () => {
+      window.removeEventListener('keydown', onDown);
+      window.removeEventListener('keyup', onUp);
+      held.clear();
+    };
+  }, []);
+
+  // Look-drag: rotate the view direction around the standing eye, never the
+  // eye around the view. Spherical angles are re-derived from the live target
+  // each event, so the drag composes with walking and with the eased fly-in.
+  useEffect(() => {
+    if (!walking) {
+      return undefined;
+    }
+
+    const element = gl.domElement;
+    let last: { x: number; y: number } | null = null;
+
+    const onDown = (event: PointerEvent) => {
+      if (event.button === 0) {
+        last = { x: event.clientX, y: event.clientY };
+      }
+    };
+    const onMove = (event: PointerEvent) => {
+      if (!last || !controls.current) {
+        return;
+      }
+      const dx = event.clientX - last.x;
+      const dy = event.clientY - last.y;
+      last = { x: event.clientX, y: event.clientY };
+
+      const next = lookDrag(
+        { position: three.position.toArray() as Vec3Tuple, target: controls.current.target.toArray() as Vec3Tuple },
+        dx,
+        dy,
+        LOOK_SPEED,
+      );
+      controls.current.target.set(...next);
+      controls.current.update();
+    };
+    const onUp = () => {
+      last = null;
+    };
+
+    element.addEventListener('pointerdown', onDown);
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+    return () => {
+      element.removeEventListener('pointerdown', onDown);
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+    };
+  }, [walking, gl, three]);
+
   useFrame((_, delta) => {
-    if (progress.current >= 1 || !controls.current) {
+    if (!controls.current) {
       return;
     }
 
-    progress.current = Math.min(1, progress.current + delta * 1.6);
-    // Smoothstep, so the move settles instead of stopping dead.
-    const t = progress.current * progress.current * (3 - 2 * progress.current);
+    if (progress.current < 1) {
+      progress.current = Math.min(1, progress.current + delta * 1.6);
+      // Smoothstep, so the move settles instead of stopping dead.
+      const t = progress.current * progress.current * (3 - 2 * progress.current);
 
-    three.position.lerpVectors(from.current.position, new THREE.Vector3(...pose.position), t);
-    controls.current.target.lerpVectors(from.current.target, new THREE.Vector3(...pose.target), t);
+      three.position.lerpVectors(from.current.position, new THREE.Vector3(...pose.position), t);
+      controls.current.target.lerpVectors(from.current.target, new THREE.Vector3(...pose.target), t);
+      controls.current.update();
+      return;
+    }
+
+    if (keys.current.size === 0) {
+      return;
+    }
+
+    const held = keys.current;
+    const move =
+      (held.has('arrowup') || held.has('w') ? 1 : 0) - (held.has('arrowdown') || held.has('s') ? 1 : 0);
+    const side =
+      (held.has('arrowright') || held.has('d') ? 1 : 0) - (held.has('arrowleft') || held.has('a') ? 1 : 0);
+    if (move === 0 && side === 0) {
+      return;
+    }
+
+    const gaze = {
+      position: three.position.toArray() as Vec3Tuple,
+      target: controls.current.target.toArray() as Vec3Tuple,
+    };
+    // Left/right turns the walker but strafes the overhead camera: on foot
+    // you steer, over a map you slide it.
+    const next = walking
+      ? walkStep(gaze, move, side, delta, WALK_SPEED_IN, TURN_SPEED)
+      : panStep(gaze, side, move, delta);
+    three.position.set(...next.position);
+    controls.current.target.set(...next.target);
     controls.current.update();
   });
 
-  return <OrbitControls ref={controls} makeDefault enableDamping dampingFactor={0.1} />;
+  return (
+    <OrbitControls
+      ref={controls}
+      makeDefault
+      enableDamping
+      dampingFactor={0.1}
+      enableRotate={!walking}
+      enableZoom={!walking}
+      enablePan={!walking}
+    />
+  );
 }
 
 /**
@@ -809,7 +983,12 @@ function Ground({ plan, onClear }: { plan: Floorplan; onClear: () => void }) {
       }}
     >
       <planeGeometry args={[6000, 6000]} />
-      <meshStandardMaterial color="#26271f" roughness={1} />
+      <meshStandardMaterial
+        color="#e8e8e0"
+        map={surfaceTextures().ground}
+        roughness={1}
+        envMapIntensity={0.1}
+      />
     </mesh>
   );
 }
@@ -843,8 +1022,9 @@ function Daylight({ plan }: { plan: Floorplan }) {
         intensity={2.2}
         color="#fff3e0"
         castShadow
-        shadow-mapSize={[2048, 2048]}
+        shadow-mapSize={[4096, 4096]}
         shadow-bias={-0.0004}
+        shadow-normalBias={0.15}
         shadow-camera-left={-reach}
         shadow-camera-right={reach}
         shadow-camera-top={reach}
@@ -1014,6 +1194,11 @@ export function CameraBar() {
         );
       })}
       <span className="camera-note">{camera.description}</span>
+      <span className="camera-hint">
+        {camera.mode === 'firstPerson'
+          ? 'Arrows/WASD walk · drag to look'
+          : 'Arrows/WASD pan'}
+      </span>
     </div>
   );
 }
@@ -1049,8 +1234,9 @@ export function Scene() {
       <div className="viewport-canvas">
       <Canvas
         shadows="soft"
+        dpr={[1, 2]}
         camera={{ fov: 50, near: 1, far: 5000, position: [500, 400, 500] }}
-        gl={{ toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.1 }}
+        gl={{ toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.15 }}
         onPointerMissed={() => {
           // A gesture's release often mismatches its press target, which r3f
           // reports as a miss; that echo must not clear the selection.
@@ -1105,7 +1291,7 @@ export function Scene() {
             wall and a cool fill. This is what steel, porcelain and glass
             reflect. Built from Lightformers so nothing is fetched -- a CDN
             HDRI that fails to load would leave the scene flat again. */}
-        <Environment resolution={128} frames={1} environmentIntensity={0.45}>
+        <Environment resolution={256} frames={1} environmentIntensity={0.55}>
           <color attach="background" args={['#20232a']} />
           <Lightformer form="rect" intensity={3} position={[0, 400, 0]} rotation={[Math.PI / 2, 0, 0]} scale={[600, 600, 1]} color="#f4efe4" />
           <Lightformer form="rect" intensity={2} position={[500, 120, 100]} rotation={[0, -Math.PI / 2, 0]} scale={[500, 180, 1]} color="#ffe8c8" />
@@ -1116,7 +1302,10 @@ export function Scene() {
             meet floors and under every piece. SMAA replaces MSAA (off below),
             and a light vignette settles the frame. */}
         <EffectComposer multisampling={0}>
-          <N8AO aoRadius={24} intensity={3.5} distanceFalloff={1} halfRes />
+          <N8AO aoRadius={20} intensity={4} distanceFalloff={1} halfRes />
+          {/* Only genuinely hot pixels bloom -- sun glints off steel, glass
+              and counter clearcoat -- a soft halo, not a glow filter. */}
+          <Bloom mipmapBlur luminanceThreshold={0.95} intensity={0.3} />
           <SMAA />
           <Vignette offset={0.28} darkness={0.5} />
         </EffectComposer>
