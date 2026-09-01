@@ -131,9 +131,21 @@ describe('room list', () => {
   it('selects a room, which is what get_selection reports', () => {
     render(<App />);
 
-    fireEvent.click(screen.getByText('Bedroom 2'));
+    // The inventory also says "Bedroom 2"; the rooms list renders first.
+    fireEvent.click(screen.getAllByText('Bedroom 2')[0]);
 
     expect(floorplanStore.getState().selection).toEqual({ elementIds: ['bed2'], kind: 'room' });
+  });
+});
+
+describe('inventory', () => {
+  it('lists placed pieces by room and selects on click', () => {
+    render(<App />);
+
+    // The fixture has two queen beds; Bedroom 1's renders first.
+    fireEvent.click(screen.getAllByText('Queen bed')[0]);
+
+    expect(floorplanStore.getState().selection).toEqual({ elementIds: ['bed-1'], kind: 'furniture' });
   });
 });
 

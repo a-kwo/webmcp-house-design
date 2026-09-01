@@ -160,6 +160,27 @@ describe('selection actions', () => {
     expect(sofa.rotation).toBe(90);
   });
 
+  it('removes the piece behind the red cross and clears the selection', () => {
+    floorplanStore.getState().select(['sofa-1']);
+    render(<SelectionActions />);
+
+    fireEvent.click(screen.getByLabelText('Remove sofa'));
+
+    expect(floorplanStore.getState().plan.furniture.some((item) => item.id === 'sofa-1')).toBe(false);
+    expect(floorplanStore.getState().selection.elementIds).toEqual([]);
+    // One undo away, like any other edit.
+    expect(floorplanStore.getState().undoStack).toHaveLength(1);
+  });
+
+  it('removes on the Delete key too', () => {
+    floorplanStore.getState().select(['bed-2']);
+    render(<SelectionActions />);
+
+    fireEvent.keyDown(window, { key: 'Delete' });
+
+    expect(floorplanStore.getState().plan.furniture.some((item) => item.id === 'bed-2')).toBe(false);
+  });
+
   it('shows the refusal when a turn does not fit', () => {
     // Park the bed against Bedroom 1's west wall; turned 90deg its 80in side
     // would poke through it.

@@ -5,6 +5,7 @@ import { registerFloorplanTools, resolveModelContext } from '../mcp/tools';
 import { Scene } from './Scene';
 import { TemplatePicker } from './TemplatePicker';
 import { Palette } from './Palette';
+import { catalogItem } from '../domain/catalog';
 import { useFloorplanStore } from '../state/floorplanStore';
 
 export function App() {
@@ -91,6 +92,39 @@ export function App() {
           </p>
           <Palette />
         </section>
+        {plan.furniture.length > 0 ? (
+          <section>
+            <h2>
+              Placed <span className="count">{plan.furniture.length}</span>
+            </h2>
+            {/* Click-to-select from a list: the piece hidden behind a bed is
+                unreachable by clicking the scene, and this is the inventory of
+                what the design actually contains. */}
+            <ul className="inventory">
+              {plan.rooms
+                .filter((room) => plan.furniture.some((item) => item.roomId === room.id))
+                .map((room) => (
+                  <li key={room.id} className="inventory-room">
+                    <span className="inventory-room-name">{room.name}</span>
+                    <ul>
+                      {plan.furniture
+                        .filter((item) => item.roomId === room.id)
+                        .map((item) => (
+                          <li
+                            key={item.id}
+                            className={selection.elementIds.includes(item.id) ? 'selected' : undefined}
+                            onClick={() => select([item.id])}
+                          >
+                            <span>{catalogItem(item.catalogId)?.label ?? item.catalogId}</span>
+                            {item.color ? <span className="swatch" style={{ background: item.color }} /> : null}
+                          </li>
+                        ))}
+                    </ul>
+                  </li>
+                ))}
+            </ul>
+          </section>
+        ) : null}
         <section>
           <h2>
             Violations <span className="count">{violations.length}</span>

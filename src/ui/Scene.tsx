@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
-import { Edges, Environment, Lightformer, OrbitControls } from '@react-three/drei';
+import { Edges, Environment, Html, Lightformer, OrbitControls } from '@react-three/drei';
 import { EffectComposer, N8AO, SMAA, Vignette } from '@react-three/postprocessing';
 import type { ThreeEvent } from '@react-three/fiber';
 import * as THREE from 'three';
 import { catalogItem } from '../domain/catalog';
-import { moveFurniture, placeFurniture } from '../domain/operations';
+import { moveFurniture, placeFurniture, removeElement, updateOpening } from '../domain/operations';
 import { boundingBox, facingVector, roomPolygon } from '../domain/geometry';
 import { FurnitureModel } from './FurnitureModel';
 import { TEXTURE_SPAN_IN, surfaceTextures } from './textures';
@@ -427,6 +427,7 @@ function FurniturePiece({ item, wallHeight }: { item: Furniture; wallHeight: num
   const selected = useSelected(item.id);
   const onClick = useSelect(item.id);
   const applyOperation = useFloorplanStore((state) => state.applyOperation);
+  const clearSelection = useFloorplanStore((state) => state.clearSelection);
   const controls = useThree((state) => state.controls) as { enabled: boolean } | null;
   const camera = useThree((state) => state.camera);
   const gl = useThree((state) => state.gl);
@@ -460,7 +461,15 @@ function FurniturePiece({ item, wallHeight }: { item: Furniture; wallHeight: num
     return t > 0 ? { x: origin.x + direction.x * t, y: origin.z + direction.z * t } : null;
   };
 
+  const cameraMode = useFloorplanStore((state) => state.camera.mode);
+
   const onPointerDown = (event: ThreeEvent<PointerEvent>) => {
+    // Eye-level rays graze the floor plane, so in the walkthrough a small
+    // mouse move unprojects to a jump of several feet; selection still works,
+    // manipulation needs an overhead view.
+    if (cameraMode === 'firstPerson') {
+      return;
+    }
     const at = floorPoint(event);
     if (!at) {
       return;
@@ -544,7 +553,30 @@ function FurniturePiece({ item, wallHeight }: { item: Furniture; wallHeight: num
         onClick={onClick}
         onPointerDown={onPointerDown}
       />
-      {selected && dragPosition === null && item.catalogId !== 'tv-wall' ? (
+      {selected && dragPosition === null ? (
+        // The delete lives on the piece itself: a toolbar across the screen is
+        // where controls go to be missed. Screen-space, so it stays finger-
+        // sized at any zoom.
+        <Html
+          position={[shown[0], height + 14, shown[2]]}
+          center
+          zIndexRange={[20, 10]}
+        >
+          <button
+            type="button"
+            className="delete-float"
+            aria-label={`Remove ${item.catalogId}`}
+            onClick={(event) => {
+              event.stopPropagation();
+              applyOperation((plan) => removeElement(plan, item.id));
+              clearSelection();
+            }}
+          >
+            &#10005;
+          </button>
+        </Html>
+      ) : null}
+      {selected && dragPosition === null && item.catalogId !== 'tv-wall' && cameraMode !== 'firstPerson' ? (
         <RotateHandle
           item={item}
           preview={rotationPreview}
@@ -838,11 +870,32 @@ export function SelectionActions() {
   const plan = useFloorplanStore((state) => state.plan);
   const selection = useFloorplanStore((state) => state.selection);
   const applyOperation = useFloorplanStore((state) => state.applyOperation);
+  const clearSelection = useFloorplanStore((state) => state.clearSelection);
   const [error, setError] = useState<string | null>(null);
 
   const item = selection.kind === 'furniture'
     ? plan.furniture.find((candidate) => candidate.id === selection.elementIds[0])
     : undefined;
+  const opening = selection.kind === 'opening'
+    ? plan.openings.find((candidate) => candidate.id === selection.elementIds[0])
+    : undefined;
+
+  const change = (input: { widthIn?: number; kind?: 'door' | 'archway'; swing?: 'in-left' | 'in-right' }) => {
+    if (!opening) {
+      return;
+    }
+    const result = applyOperation((current) => updateOpening(current, { openingId: opening.id, ...input }));
+    setError(result.ok ? null : result.error);
+  };
+
+  const removeOpening = () => {
+    if (!opening) {
+      return;
+    }
+    applyOperation((current) => removeElement(current, opening.id));
+    clearSelection();
+    setError(null);
+  };
 
   const rotate = () => {
     if (!item) {
@@ -854,7 +907,18 @@ export function SelectionActions() {
     setError(result.ok ? null : result.error);
   };
 
-  // R turns the selected piece; the button is the discoverable version.
+  const remove = () => {
+    if (!item) {
+      return;
+    }
+    // removeElement never fails for furniture, and it is one undo away.
+    applyOperation((current) => removeElement(current, item.id));
+    clearSelection();
+    setError(null);
+  };
+
+  // R turns the selected piece, Delete removes it; buttons are the
+  // discoverable versions of both.
   useEffect(() => {
     if (!item) {
       return undefined;
@@ -863,11 +927,38 @@ export function SelectionActions() {
       if (event.key === 'r' || event.key === 'R') {
         rotate();
       }
+      if (event.key === 'Delete' || event.key === 'Backspace') {
+        remove();
+      }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [item?.id, item?.rotation]);
+
+  if (opening) {
+    // The rail's suggestions name these exact moves; a human should be able
+    // to take them without an agent in the room.
+    const door = opening.kind === 'door';
+    const flipped = opening.swing === 'in-left' || opening.swing === 'out-left' ? 'in-right' : 'in-left';
+
+    return (
+      <div className="selection-actions">
+        <span className="selection-name">{opening.kind} {opening.width}in</span>
+        <button type="button" onClick={() => change({ widthIn: opening.width + 6 })}>Wider +6</button>
+        <button type="button" onClick={() => change({ widthIn: opening.width - 6 })}>Narrower &minus;6</button>
+        {door ? <button type="button" onClick={() => change({ kind: 'archway' })}>Make archway</button> : null}
+        {!door && opening.kind === 'archway' ? <button type="button" onClick={() => change({ kind: 'door' })}>Make door</button> : null}
+        {door && opening.swing !== 'sliding' && opening.swing !== 'none' ? (
+          <button type="button" onClick={() => change({ swing: flipped })}>Flip hinge</button>
+        ) : null}
+        <button type="button" className="delete" aria-label={`Remove ${opening.kind}`} onClick={removeOpening}>
+          &#10005;
+        </button>
+        {error ? <span className="selection-error">{error}</span> : null}
+      </div>
+    );
+  }
 
   if (!item) {
     return null;
@@ -878,6 +969,9 @@ export function SelectionActions() {
       <span className="selection-name">{item.catalogId}</span>
       <button type="button" onClick={rotate}>Rotate 90&deg;</button>
       <kbd>R</kbd>
+      <button type="button" className="delete" aria-label={`Remove ${item.catalogId}`} onClick={remove}>
+        &#10005;
+      </button>
       {error ? <span className="selection-error">{error}</span> : null}
     </div>
   );

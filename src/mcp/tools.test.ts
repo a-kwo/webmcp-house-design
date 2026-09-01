@@ -62,7 +62,8 @@ describe('registration', () => {
       'get_layout', 'get_selection', 'compute_areas', 'validate_layout', 'get_camera',
       'list_templates', 'start_from_template',
       'add_room', 'move_wall', 'resize_room', 'add_opening', 'place_furniture',
-      'move_furniture', 'remove_element', 'set_camera', 'undo', 'propose_variants',
+      'move_furniture', 'update_opening', 'apply_edits', 'remove_element',
+      'set_camera', 'undo', 'propose_variants',
     ]) {
       expect(context.tools.has(name)).toBe(true);
     }
@@ -242,6 +243,46 @@ describe('write tools', () => {
 
     const layout = call('get_layout', { detail: 'full' });
     expect(layout.furniture.find((item: { id: string }) => item.id === 'sofa-1').roomId).toBe('bed2');
+  });
+
+  it('fixes the demo violation in one update_opening call', async () => {
+    const { call } = await setup();
+    const result = call('update_opening', { openingId: 'hall-bath', widthIn: 32 });
+
+    expect(result.ok).toBe(true);
+    expect(result.violations.some((violation: { code: string }) => violation.code === 'DOOR_MIN_WIDTH')).toBe(false);
+  });
+
+  it('furnishes a room in one apply_edits round trip', async () => {
+    const { call } = await setup();
+    const result = call('apply_edits', {
+      edits: [
+        { action: 'place_furniture', roomId: 'living', catalogId: 'table', footprint: { w: 48, d: 30 }, position: { x: 150, y: 60 } },
+        { action: 'place_furniture', roomId: 'living', catalogId: 'chair', footprint: { w: 22, d: 22 }, position: { x: 150, y: 108 } },
+        { action: 'update_opening', openingId: 'hall-bath', widthIn: 36 },
+      ],
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.applied).toBe(3);
+    expect(result.violations.some((violation: { code: string }) => violation.code === 'DOOR_MIN_WIDTH')).toBe(false);
+  });
+
+  it('keeps going past a failed edit and reports it in place', async () => {
+    const { call } = await setup();
+    const result = call('apply_edits', {
+      edits: [
+        { action: 'place_furniture', roomId: 'nowhere', catalogId: 'chair', footprint: { w: 22, d: 22 } },
+        { action: 'teleport', target: 'moon' },
+        { action: 'update_opening', openingId: 'hall-bath', widthIn: 36 },
+      ],
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.applied).toBe(1);
+    expect(result.results[0].error).toContain('No room');
+    expect(result.results[1].error).toContain('Unknown action');
+    expect(result.results[2].ok).toBe(true);
   });
 
   it('undoes back to the starting plan', async () => {

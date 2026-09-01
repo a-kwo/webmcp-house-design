@@ -520,6 +520,92 @@ export function placeFurniture(
 }
 
 /**
+ * Changes an opening in place -- width, kind, or swing -- keeping its id, so
+ * "widen this door" is one operation instead of remove-and-re-add. Widening
+ * grows both ways from the centre; widths round up like add_opening, because
+ * every width rule is a minimum.
+ */
+export function updateOpening(
+  plan: Floorplan,
+  input: { openingId: string; widthIn?: number; kind?: Opening['kind']; swing?: Opening['swing'] },
+): OperationResult {
+  const opening = plan.openings.find((candidate) => candidate.id === input.openingId);
+  if (!opening) {
+    return fail(`No opening with id "${input.openingId}". Call get_layout to list the current opening ids.`);
+  }
+
+  if (input.widthIn === undefined && input.kind === undefined && input.swing === undefined) {
+    return fail(`update_opening needs a widthIn, kind, or swing for ${opening.id}.`);
+  }
+
+  const wall = plan.walls.find((candidate) => candidate.id === opening.wallId)!;
+  const span = distance(wall.start, wall.end);
+
+  const width = input.widthIn === undefined ? opening.width : snapUpToGrid(input.widthIn, GRID_IN);
+  if (width <= 0) {
+    return fail(`An opening needs a positive width; ${input.widthIn}in rounds to ${width}in.`);
+  }
+
+  // Grow or shrink about the centre, then clamp back onto the wall.
+  const centre = opening.offset + opening.width / 2;
+  let offset = snapToGrid(centre - width / 2, GRID_IN);
+  offset = Math.min(Math.max(offset, 0), span - width);
+  if (offset < 0) {
+    return fail(`${opening.id} cannot reach ${width}in on ${wall.id}, which is only ${Math.round(span)}in long.`);
+  }
+
+  const clash = openingsOnWall(plan, wall)
+    .filter((existing) => existing.opening.id !== opening.id)
+    .find((existing) => Math.min(existing.to, offset + width) - Math.max(existing.from, offset) > FIT_TOLERANCE_IN);
+  if (clash) {
+    return fail(
+      `Widening ${opening.id} to ${width}in would overlap ${clash.opening.id}, which runs from ${Math.round(clash.from)}in to ${Math.round(clash.to)}in along ${wall.id}.`,
+    );
+  }
+
+  const kind = input.kind ?? opening.kind;
+  if (input.swing !== undefined && kind !== 'door') {
+    return fail(`Only doors swing; ${opening.id} is ${kind === 'archway' ? 'an archway' : `a ${kind}`}.`);
+  }
+
+  const next = clone(plan);
+  const target = next.openings.find((candidate) => candidate.id === opening.id)!;
+  target.width = width;
+  target.offset = offset;
+  target.kind = kind;
+  if (kind === 'archway') {
+    target.swing = 'none';
+    target.sillHeight = 0;
+  } else if (kind === 'door') {
+    target.sillHeight = 0;
+    target.swing = input.swing ?? (opening.kind === 'door' ? opening.swing : 'in-left');
+  }
+  if (input.swing !== undefined) {
+    target.swing = input.swing;
+  }
+
+  const changes: string[] = [];
+  if (width !== opening.width) {
+    changes.push(`width to ${width}in${input.widthIn !== undefined && width !== input.widthIn ? ` (${input.widthIn}in rounded up to the grid)` : ''}`);
+  }
+  if (kind !== opening.kind) {
+    changes.push(`kind to ${kind}`);
+  }
+  if (input.swing !== undefined && input.swing !== opening.swing) {
+    changes.push(`swing to ${input.swing}`);
+  }
+
+  return {
+    ok: true,
+    plan: next,
+    changed: [opening.id, wall.id],
+    summary: changes.length > 0
+      ? `Changed ${opening.id}: ${changes.join(', ')}.`
+      : `${opening.id} already matches the request.`,
+  };
+}
+
+/**
  * Moves or turns a piece of furniture already in the plan. The human's drag
  * and the agent's tool call are this same operation, so the two see identical
  * snapping, identical fit rules, and identical errors.

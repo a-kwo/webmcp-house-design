@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { computeRoomSummaries, roomDimensions } from './geometry';
-import { addOpening, addRoom, moveFurniture, moveWall, placeFurniture, removeElement, resizeRoom } from './operations';
+import { addOpening, addRoom, moveFurniture, moveWall, placeFurniture, removeElement, resizeRoom, updateOpening } from './operations';
 import type { OperationResult } from './operations';
 import { sampleFloorplan } from './sampleFloorplan';
 import type { Floorplan } from './types';
@@ -313,6 +313,50 @@ describe('placeFurniture', () => {
 
     expect(flat.ok).toBe(true);
     expect(turned.ok).toBe(false);
+  });
+});
+
+describe('updateOpening', () => {
+  it('widens the demo door in place, keeping its id', () => {
+    // hall-bath is the sample's deliberate violation: 30in where 32 is the
+    // minimum. Asking for 32 rounds up to 36, centred where the door was.
+    const result = expectOk(updateOpening(sampleFloorplan, { openingId: 'hall-bath', widthIn: 32 }));
+    const door = result.plan.openings.find((candidate) => candidate.id === 'hall-bath')!;
+
+    expect(door.width).toBe(36);
+    expect(result.summary).toContain('rounded up');
+    expect(validate(result.plan).some((violation) => violation.code === 'DOOR_MIN_WIDTH')).toBe(false);
+  });
+
+  it('turns a door into an archway, dropping its swing', () => {
+    const result = expectOk(updateOpening(sampleFloorplan, { openingId: 'hall-bath', kind: 'archway' }));
+    const arch = result.plan.openings.find((candidate) => candidate.id === 'hall-bath')!;
+
+    expect(arch.kind).toBe('archway');
+    expect(arch.swing).toBe('none');
+  });
+
+  it('flips a hinge in one call', () => {
+    const result = expectOk(updateOpening(sampleFloorplan, { openingId: 'hall-bed2', swing: 'in-left' }));
+    expect(result.plan.openings.find((candidate) => candidate.id === 'hall-bed2')!.swing).toBe('in-left');
+  });
+
+  it('refuses to widen into a neighbouring opening', () => {
+    // living-bed1 (x48-80) and a widened neighbour would collide if grown far
+    // enough; manufacture one next to it.
+    const withDoor = expectOk(addOpening(sampleFloorplan, { wallId: 'living-S', kind: 'door', offsetIn: 90, widthIn: 32 }));
+    const error = expectFail(updateOpening(withDoor.plan, { openingId: 'living-bed1', widthIn: 60 }));
+
+    expect(error).toContain('would overlap');
+  });
+
+  it('refuses swings on things that do not swing', () => {
+    const error = expectFail(updateOpening(sampleFloorplan, { openingId: 'bed1-window', swing: 'in-left' }));
+    expect(error).toContain('Only doors swing');
+  });
+
+  it('rejects an unknown id with a recovery hint', () => {
+    expect(expectFail(updateOpening(sampleFloorplan, { openingId: 'ghost', widthIn: 36 }))).toContain('get_layout');
   });
 });
 

@@ -527,3 +527,69 @@ code {
   font-size: 12px;
   max-width: 300px;
 }
+
+.selection-actions .delete {
+  background: rgba(199, 90, 90, 0.16);
+  border-color: #8a4a4a;
+  color: #e08c8c;
+  font-size: 13px;
+  line-height: 1;
+  padding: 4px 8px;
+}
+
+.selection-actions .delete:hover {
+  background: rgba(199, 90, 90, 0.32);
+  color: #f2b0b0;
+}
+
+.delete-float {
+  align-items: center;
+  background: #c75a5a;
+  border: 2px solid #1d1d1c;
+  border-radius: 50%;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+  color: #fff;
+  cursor: pointer;
+  display: flex;
+  font-size: 13px;
+  font-weight: 700;
+  height: 24px;
+  justify-content: center;
+  line-height: 1;
+  padding: 0;
+  width: 24px;
+}
+
+.delete-float:hover {
+  background: #e06c6c;
+}
+
+.inventory-room {
+  border-top: 1px solid #2c2c2b;
+  display: block;
+  padding: 6px 0 2px;
+}
+
+.inventory-room-name {
+  color: #777168;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.inventory-room li {
+  border: 0;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 13px;
+  padding: 4px 8px;
+}
+
+.inventory-room li:hover {
+  background: #262625;
+}
+
+.inventory-room li.selected {
+  background: #2a3a55;
+  outline: none;
+}

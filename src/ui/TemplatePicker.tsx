@@ -67,7 +67,10 @@ export function TemplatePicker() {
               key={template.id}
               type="button"
               className="template-card"
-              onClick={() => loadTemplate(template.id)}
+              // pointerdown, not click: the first press into a newly focused
+              // window can arrive without its click, and a dead first tap on
+              // the opening screen reads as a broken app.
+              onPointerDown={() => loadTemplate(template.id)}
             >
               <Thumbnail template={template} />
               <strong>{template.name}</strong>

@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { zodToJsonSchema } from 'zod-to-json-schema';
 import { boundingBox, coincidentWalls, computeRoomSummaries, roomDimensions, roomPolygon } from '../domain/geometry';
-import { addOpening, addRoom, moveFurniture, moveWall, placeFurniture, removeElement, resizeRoom } from '../domain/operations';
+import { addOpening, addRoom, moveFurniture, moveWall, placeFurniture, removeElement, resizeRoom, updateOpening } from '../domain/operations';
 import { TEMPLATES } from '../domain/templates';
 import type { Floorplan } from '../domain/types';
 import { validate } from '../domain/validate';
@@ -121,6 +121,16 @@ const schemas = {
     position: z.object({ x: z.number(), y: z.number() }).optional()
       .describe('New centre in plan inches; the room it lands in is inferred.'),
     rotation: z.number().optional().describe('Degrees; 0 faces the bottom of the plan.'),
+  }),
+  update_opening: z.object({
+    openingId: z.string(),
+    widthIn: z.number().optional().describe('New clear width; rounds up to the 6in grid, grows about the centre.'),
+    kind: z.enum(['door', 'window', 'archway']).optional(),
+    swing: z.enum(['in-left', 'in-right', 'out-left', 'out-right', 'sliding', 'none']).optional(),
+  }),
+  apply_edits: z.object({
+    edits: z.array(z.object({ action: z.string() }).passthrough()).min(1).max(20)
+      .describe('Each edit is {action, ...params}: the action names another write tool (place_furniture, move_furniture, update_opening, add_opening, remove_element, move_wall, resize_room, add_room) and the params are that tool\'s. Runs in order; a failed edit reports its error and the rest continue.'),
   }),
   remove_element: z.object({
     elementId: z.string().describe('A wall, room, opening or furniture id.'),
@@ -366,6 +376,51 @@ export async function registerFloorplanTools(
   register('move_furniture', 'Move or turn a piece already in the plan; dropping it in another room re-homes it.', (input) =>
     envelope(state().applyOperation((plan) => moveFurniture(plan, input))));
 
+  register('update_opening', 'Change a door, window or archway in place: widen it, convert it, or flip its swing.', (input) =>
+    envelope(state().applyOperation((plan) => updateOpening(plan, input))));
+
+  register('apply_edits', 'Run several edits in one call -- furnish a whole room in a single round trip.', (input) => {
+    const operations = {
+      place_furniture: placeFurniture,
+      move_furniture: moveFurniture,
+      update_opening: updateOpening,
+      add_opening: addOpening,
+      remove_element: (plan: Floorplan, args: { elementId: string }) => removeElement(plan, args.elementId),
+      move_wall: moveWall,
+      resize_room: resizeRoom,
+      add_room: addRoom,
+    } as const;
+
+    const results = input.edits.map((edit) => {
+      const { action, ...rest } = edit as { action: string } & Record<string, unknown>;
+      const schema = (schemas as Record<string, z.ZodTypeAny>)[action];
+      const run = operations[action as keyof typeof operations];
+
+      if (!schema || !run) {
+        return { ok: false as const, action, error: `Unknown action "${action}". Use one of: ${Object.keys(operations).join(', ')}.` };
+      }
+
+      const parsed = schema.safeParse(rest);
+      if (!parsed.success) {
+        const issue = parsed.error.issues[0];
+        return { ok: false as const, action, error: `Invalid input for ${action}: ${issue.path.join('.') || 'input'} ${issue.message}.` };
+      }
+
+      const outcome = state().applyOperation((plan) => (run as (p: Floorplan, a: unknown) => ReturnType<typeof placeFurniture>)(plan, parsed.data));
+      return outcome.ok
+        ? { ok: true as const, action, summary: outcome.summary, changed: outcome.changed }
+        : { ok: false as const, action, error: outcome.error };
+    });
+
+    // One validation of where the batch landed, instead of one per edit.
+    return {
+      ok: results.every((result) => result.ok),
+      applied: results.filter((result) => result.ok).length,
+      results,
+      violations: validate(state().plan),
+    };
+  });
+
   register('remove_element', 'Remove a wall, room, opening or furniture item, cascading to what depends on it.', (input) =>
     envelope(state().applyOperation((plan) => removeElement(plan, input.elementId))));
 
@@ -505,16 +560,20 @@ export async function registerFloorplanTools(
 export function describeCamera(plan: Floorplan, mode: string, targetRoomId?: string): string {
   const room = plan.rooms.find((candidate) => candidate.id === targetRoomId);
 
-  if (mode === 'firstPerson' && room) {
-    const box = boundingBox(roomPolygon(plan, room));
-    const neighbours = computeRoomSummaries(plan).find((summary) => summary.id === room.id)?.adjacentRoomIds ?? [];
+  // cameraPose falls back to the first room when no target is set; the words
+  // must fall back the same way or the caption describes a different view.
+  const focusRoom = room ?? (mode === 'firstPerson' ? plan.rooms[0] : undefined);
+
+  if (mode === 'firstPerson' && focusRoom) {
+    const box = boundingBox(roomPolygon(plan, focusRoom));
+    const neighbours = computeRoomSummaries(plan).find((summary) => summary.id === focusRoom.id)?.adjacentRoomIds ?? [];
     const facing = neighbours
       .map((id) => plan.rooms.find((candidate) => candidate.id === id)?.name)
       .filter(Boolean)[0];
 
     return facing
-      ? `Standing in ${room.name}, facing the ${facing}.`
-      : `Standing in ${room.name} (${Math.round(box.maxX - box.minX)}in across).`;
+      ? `Standing in ${focusRoom.name}, facing the ${facing}.`
+      : `Standing in ${focusRoom.name} (${Math.round(box.maxX - box.minX)}in across).`;
   }
 
   if (mode === 'top') {
