@@ -207,7 +207,7 @@ export function buildPlan(spec: PlanSpec): Floorplan {
 
   return {
     units: 'in',
-    ceilingHeight: spec.ceilingHeight ?? 96,
+    ceilingHeight: spec.ceilingHeight ?? 108,
     walls,
     rooms,
     openings: spec.openings.map((opening) => buildOpening(walls, rooms, opening)),

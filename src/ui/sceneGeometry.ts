@@ -21,7 +21,7 @@ import type { Floorplan, Furniture, Room, Wall } from '../domain/types';
 const DEGREES_TO_RADIANS = Math.PI / 180;
 
 /** Height the walls are cut to in the overhead views, so you can see in. */
-export const DOLLHOUSE_WALL_HEIGHT_IN = 42;
+export const DOLLHOUSE_WALL_HEIGHT_IN = 48;
 /** Strip of wall left above an opening so the panel stays simply connected. */
 const LINTEL_IN = 2;
 /** Keeps a hole off the panel edge, where a coincident vertex breaks meshing. */
@@ -54,12 +54,14 @@ export const FURNITURE_HEIGHT_IN: Record<string, number> = {
   dishwasher: 34,
   table: 30,
   'tv-stand': 44,
-  fridge: 70,
+  fridge: 66,
   desk: 30,
-  bookshelf: 72,
+  // Low-profile real variants: the 6ft-plus versions towered over the 48in
+  // dollhouse cut and read as oversized even though the heights were real.
+  bookshelf: 54,
   nightstand: 24,
   dresser: 34,
-  wardrobe: 78,
+  wardrobe: 72,
   washer: 38,
   counter: 36,
   // Mounted panel: its model hangs the screen high on the wall, so the height

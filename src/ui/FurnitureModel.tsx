@@ -141,20 +141,79 @@ function Sink({ w, d, h }: ModelProps) {
 function Island({ w, d, h, tint }: ModelProps) {
   return (
     <>
-      {/* Base inset for a toe kick, slab overhanging it. */}
-      <Part y={(h - 3) / 2} sx={w * 0.92} sy={h - 3} sz={d * 0.88} color={tint ?? WOOD} />
-      <Part y={h - 1.5} sx={w} sy={3} sz={d} color={COUNTER} roughness={0.5} />
+      {/* Freestanding: the slab overhangs an inset base on every side, with a
+          toe kick and seat rail -- nothing touches a wall. */}
+      <Part y={(h - 3) / 2 + 2} sx={w * 0.88} sy={h - 7} sz={d * 0.8} color={tint ?? WOOD} />
+      <Part y={1.5} sx={w * 0.82} sy={3} sz={d * 0.74} color={DARK_WOOD} />
+      <Part y={h - 1.5} sx={w} sy={3} sz={d} color={COUNTER} roughness={0.35} />
+      <Part z={d * 0.4} y={h - 4.5} sx={w * 0.88} sy={1.2} sz={1.2} color={DARK_WOOD} />
+    </>
+  );
+}
+
+function Counter({ w, d, h, tint }: ModelProps) {
+  const cabinet = tint ?? '#9b8c74';
+
+  return (
+    <>
+      {/* A wall run: full-width cabinets on a toe kick, seamed doors on the
+          front, and a backsplash standing up the wall side (-z). */}
+      <Part y={(h - 3) / 2 + 2} sx={w} sy={h - 7} sz={d * 0.94} color={cabinet} />
+      <Part y={1.5} z={-d * 0.03} sx={w * 0.94} sy={3} sz={d * 0.8} color={DARK_WOOD} />
+      <Part y={h - 1.5} sx={w} sy={3} sz={d} color={COUNTER} roughness={0.35} />
+      <Part z={-d / 2 + 0.8} y={h + 3} sx={w} sy={6} sz={1.6} color={COUNTER} roughness={0.4} />
+      {[-0.25, 0, 0.25].map((seam) => (
+        <Part key={seam} x={seam * w} z={d / 2 - 0.2} y={(h - 4) / 2 + 1} sx={0.6} sy={h - 10} sz={0.6} color={DARK_WOOD} />
+      ))}
+      <Part x={-w * 0.12} z={d / 2 + 0.6} y={h * 0.62} sx={w * 0.14} sy={1.1} sz={1.1} color={STEEL} roughness={0.22} metalness={0.85} />
+      <Part x={w * 0.13} z={d / 2 + 0.6} y={h * 0.62} sx={w * 0.14} sy={1.1} sz={1.1} color={STEEL} roughness={0.22} metalness={0.85} />
+    </>
+  );
+}
+
+function DiningTable({ w, d, h, tint }: ModelProps) {
+  const wood = tint ?? WOOD;
+
+  return (
+    <>
+      <Part y={h - 1.2} sx={w} sy={2.4} sz={d} color={wood} roughness={0.5} />
+      {[-1, 1].flatMap((lx) =>
+        [-1, 1].map((lz) => (
+          <Part key={`${lx}${lz}`} x={lx * (w / 2 - 2.5)} z={lz * (d / 2 - 2.5)} y={(h - 2.4) / 2} sx={2.2} sy={h - 2.4} sz={2.2} color={DARK_WOOD} />
+        )),
+      )}
     </>
   );
 }
 
 function Range({ w, d, h, tint }: ModelProps) {
+  const body = tint ?? STEEL;
+
   return (
     <>
-      <Part y={h / 2 - 1} sx={w} sy={h - 2} sz={d} color={tint ?? STEEL} roughness={0.4} metalness={0.7} />
-      <Part y={h - 0.8} sx={w * 0.94} sy={1.6} sz={d * 0.94} color="#3a3a3a" roughness={0.6} />
-      {/* Oven door face on +z, the front. */}
-      <Part z={d / 2 - 0.6} y={h * 0.38} sx={w * 0.84} sy={h * 0.5} sz={1} color="#4a4a4a" roughness={0.35} />
+      <Part y={h / 2 - 1} sx={w} sy={h - 2} sz={d} color={body} roughness={0.4} metalness={0.7} />
+      {/* Cooktop with four burners. */}
+      <Part y={h - 0.8} sx={w * 0.94} sy={1.6} sz={d * 0.94} color="#2e2e2e" roughness={0.6} />
+      {[-1, 1].flatMap((bx) =>
+        [-1, 1].map((bz) => (
+          <mesh key={`${bx}${bz}`} position={[bx * w * 0.22, h + 0.4, bz * d * 0.2]} castShadow>
+            <cylinderGeometry args={[w * 0.13, w * 0.13, 0.8, 20]} />
+            <meshStandardMaterial color="#1b1b1b" roughness={0.7} />
+          </mesh>
+        )),
+      )}
+      {/* Control ledge at the back with knobs. */}
+      <Part z={-d / 2 + 1.2} y={h + 2.5} sx={w} sy={5} sz={2.4} color={body} roughness={0.35} metalness={0.7} />
+      {[-0.3, -0.1, 0.1, 0.3].map((kx) => (
+        <mesh key={kx} position={[kx * w, h + 2.5, -d / 2 + 2.6]} rotation={[Math.PI / 2, 0, 0]} castShadow>
+          <cylinderGeometry args={[1.1, 1.1, 0.8, 12]} />
+          <meshStandardMaterial color="#1f1f1f" roughness={0.5} />
+        </mesh>
+      ))}
+      {/* Oven door: window, and a bar handle. */}
+      <Part z={d / 2 - 0.6} y={h * 0.35} sx={w * 0.88} sy={h * 0.42} sz={1} color="#3a3a3a" roughness={0.35} />
+      <Part z={d / 2 + 0.1} y={h * 0.38} sx={w * 0.6} sy={h * 0.22} sz={0.6} color="#141414" roughness={0.15} />
+      <Part z={d / 2 + 1.4} y={h * 0.62} sx={w * 0.8} sy={1.6} sz={1.6} color={STEEL} roughness={0.22} metalness={0.85} />
     </>
   );
 }
@@ -322,8 +381,8 @@ const MODELS: Record<string, (props: ModelProps) => JSX.Element> = {
   sink: Sink,
   vanity: Sink,
   'kitchen-island': Island,
-  table: Island,
-  counter: Island,
+  table: DiningTable,
+  counter: Counter,
   range: Range,
   dishwasher: Range,
   'tv-stand': Television,
