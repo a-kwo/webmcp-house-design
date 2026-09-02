@@ -314,3 +314,18 @@ describe('saving and restoring', () => {
     expect(store.getState().floors).toEqual([]);
   });
 });
+
+describe('toggleDoor', () => {
+  it('closes a clicked door and reopens it on the next click', () => {
+    store.setState({ closedDoors: [] });
+
+    store.getState().toggleDoor('hall-bath');
+    expect(store.getState().closedDoors).toEqual(['hall-bath']);
+
+    store.getState().toggleDoor('entry');
+    expect(store.getState().closedDoors).toEqual(['hall-bath', 'entry']);
+
+    store.getState().toggleDoor('hall-bath');
+    expect(store.getState().closedDoors).toEqual(['entry']);
+  });
+});

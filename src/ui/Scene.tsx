@@ -492,6 +492,48 @@ function DoorLeaf({ opening, width, height }: { opening: Opening; width: number;
   // the room. Sign chosen so the leaf sweeps toward the side the arc sweeps.
   const angle = (hingedLeft ? 1 : -1) * (inward ? 1 : -1) * 0.95;
   const direction = hingedLeft ? 1 : -1;
+  return <DoorLeafSwing openingId={opening.id} hingeX={hingeX} direction={direction} ajarAngle={angle} width={width} height={height} />;
+}
+
+/**
+ * The hung leaf itself. Clicking it swings it shut on its hinge -- and open
+ * again -- eased over a few frames like a door with actual weight. Purely
+ * scene dressing: the plan's data never changes, so selection, validation and
+ * the agent all see the same design either way. Selecting the opening stays
+ * on the pane and casing.
+ */
+function DoorLeafSwing({
+  openingId,
+  hingeX,
+  direction,
+  ajarAngle,
+  width,
+  height,
+}: {
+  openingId: string;
+  hingeX: number;
+  direction: number;
+  ajarAngle: number;
+  width: number;
+  height: number;
+}) {
+  const closed = useFloorplanStore((state) => state.closedDoors.includes(openingId));
+  const toggleDoor = useFloorplanStore((state) => state.toggleDoor);
+  const swingRef = useRef<THREE.Group>(null);
+  const target = closed ? 0 : ajarAngle;
+
+  useFrame((_, delta) => {
+    const pivot = swingRef.current;
+    if (!pivot) {
+      return;
+    }
+    const gap = target - pivot.rotation.y;
+    if (Math.abs(gap) < 0.002) {
+      pivot.rotation.y = target;
+      return;
+    }
+    pivot.rotation.y += gap * Math.min(1, delta * 7);
+  });
 
   const panelW = width - 8;
   // Local y = 0 is the middle of the leaf; the knob sits at hand height off
@@ -505,7 +547,14 @@ function DoorLeaf({ opening, width, height }: { opening: Opening; width: number;
   ];
 
   return (
-    <group position={[hingeX, 0, 0]} rotation={[0, angle, 0]}>
+    <group
+      position={[hingeX, 0, 0]}
+      ref={swingRef}
+      onClick={(event) => {
+        event.stopPropagation();
+        toggleDoor(openingId);
+      }}
+    >
       {/* Hinges on the hinge line: a leaf plate with a knuckle barrel, the
           detail that says "hung", not "glued". */}
       {[height * 0.36, 0, -height * 0.36].map((y) => (

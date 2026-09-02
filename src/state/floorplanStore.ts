@@ -69,6 +69,8 @@ export type FloorplanState = {
   floorCountChosen: boolean;
   /** Palette item armed for placement, with any chosen finish. */
   armed: { catalogId: string; color?: string } | null;
+  /** Doors the human has clicked shut; pure scene dressing, never saved. */
+  closedDoors: string[];
 
   applyOperation: (operation: (plan: Floorplan) => OperationResult) => ToolEnvelope;
   loadTemplate: (templateId: string) => ToolEnvelope;
@@ -76,6 +78,7 @@ export type FloorplanState = {
   setActiveFloor: (index: number) => ToolEnvelope;
   loadDesign: (design: SavedDesign) => void;
   newDesign: () => void;
+  toggleDoor: (openingId: string) => void;
   armCatalog: (catalogId: string | null, color?: string) => void;
   select: (elementIds: string[]) => void;
   clearSelection: () => void;
@@ -123,6 +126,7 @@ export const floorplanStore = createStore<FloorplanState>()((set, get) => ({
   floorCount: restored?.floorCount ?? 1,
   floorCountChosen: restored !== null,
   armed: null,
+  closedDoors: [],
 
   applyOperation: (operation) => {
     const previous = get().plan;
@@ -305,6 +309,13 @@ export const floorplanStore = createStore<FloorplanState>()((set, get) => ({
       armed: null,
     });
   },
+
+  toggleDoor: (openingId) =>
+    set((state) => ({
+      closedDoors: state.closedDoors.includes(openingId)
+        ? state.closedDoors.filter((id) => id !== openingId)
+        : [...state.closedDoors, openingId],
+    })),
 
   armCatalog: (catalogId, color) =>
     set({ armed: catalogId === null ? null : { catalogId, ...(color === undefined ? {} : { color }) } }),
