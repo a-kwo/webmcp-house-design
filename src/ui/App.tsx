@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { computeRoomSummaries } from '../domain/geometry';
 import { validate } from '../domain/validate';
 import { registerFloorplanTools, resolveModelContext } from '../mcp/tools';
@@ -6,7 +6,8 @@ import { Scene } from './Scene';
 import { TemplatePicker } from './TemplatePicker';
 import { Palette } from './Palette';
 import { catalogItem } from '../domain/catalog';
-import { useFloorplanStore } from '../state/floorplanStore';
+import { designSnapshot, floorplanStore, useFloorplanStore } from '../state/floorplanStore';
+import { decodeShare, encodeShare, parseSavedDesign, shareFragment, shareUrl } from '../state/persistence';
 
 export function App() {
   const plan = useFloorplanStore((state) => state.plan);
@@ -19,7 +20,76 @@ export function App() {
   const floorCount = useFloorplanStore((state) => state.floorCount);
   const activeFloor = useFloorplanStore((state) => state.activeFloor);
   const setActiveFloor = useFloorplanStore((state) => state.setActiveFloor);
+  const newDesign = useFloorplanStore((state) => state.newDesign);
+  const loadDesign = useFloorplanStore((state) => state.loadDesign);
   const [toolsReady, setToolsReady] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<string | null>(null);
+  const importInput = useRef<HTMLInputElement>(null);
+
+  // A share link carries a whole design in its fragment; loading one replaces
+  // whatever is here, then the fragment is dropped so later edits autosave
+  // under this browser without the URL re-importing on every reload.
+  useEffect(() => {
+    const payload = shareFragment();
+    if (!payload) {
+      return;
+    }
+    decodeShare(payload).then((design) => {
+      if (design) {
+        loadDesign(design);
+      } else {
+        setSaveStatus('That share link did not contain a readable design.');
+      }
+      history.replaceState(null, '', location.pathname + location.search);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const onNewDesign = () => {
+    if (window.confirm('Start a new design? The current one will be discarded.')) {
+      newDesign();
+      setSaveStatus(null);
+    }
+  };
+
+  const onExport = () => {
+    const design = designSnapshot(floorplanStore.getState());
+    const blob = new Blob([JSON.stringify(design, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = 'home-design.json';
+    anchor.click();
+    URL.revokeObjectURL(url);
+    setSaveStatus('Exported home-design.json.');
+  };
+
+  const onImportFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) {
+      return;
+    }
+    const design = parseSavedDesign(await file.text());
+    if (!design) {
+      setSaveStatus('That file is not a saved design.');
+      return;
+    }
+    loadDesign(design);
+    setSaveStatus(`Imported ${file.name}.`);
+  };
+
+  const onShare = async () => {
+    const url = shareUrl(await encodeShare(designSnapshot(floorplanStore.getState())));
+    try {
+      await navigator.clipboard.writeText(url);
+      setSaveStatus('Share link copied to the clipboard.');
+    } catch {
+      // Clipboard needs a secure context and a user gesture; fall back to
+      // showing the link so it can be copied by hand.
+      setSaveStatus(url);
+    }
+  };
 
   useEffect(() => {
     // Registration is skipped outside a WebMCP-capable browser so the page
@@ -190,6 +260,24 @@ export function App() {
               {undoDepth === 0 ? 'original plan' : `${undoDepth} step${undoDepth === 1 ? '' : 's'}`}
             </code>
           </div>
+        </section>
+        <section>
+          <h2>Design file</h2>
+          <p className="note">Autosaved in this browser; leave and come back.</p>
+          <div className="history-actions save-actions">
+            <button type="button" onClick={onNewDesign}>New design</button>
+            <button type="button" onClick={onExport}>Export</button>
+            <button type="button" onClick={() => importInput.current?.click()}>Import</button>
+            <button type="button" onClick={onShare}>Share link</button>
+          </div>
+          {saveStatus ? <p className="note save-status">{saveStatus}</p> : null}
+          <input
+            ref={importInput}
+            type="file"
+            accept="application/json,.json"
+            hidden
+            onChange={onImportFile}
+          />
         </section>
         <section>
           <h2>Agent tools</h2>

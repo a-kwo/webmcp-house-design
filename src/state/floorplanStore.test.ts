@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { moveWall, removeElement } from '../domain/operations';
 import { sampleFloorplan } from '../domain/sampleFloorplan';
-import { floorplanStore } from './floorplanStore';
+import { designSnapshot, floorplanStore } from './floorplanStore';
 
 const store = floorplanStore;
 
@@ -267,5 +267,50 @@ describe('floors', () => {
     // Floor 1 was never touched by the reset.
     store.getState().setActiveFloor(0);
     expect(store.getState().plan.rooms.map((room) => room.id)).toEqual(['main', 'bath', 'closet']);
+  });
+});
+
+describe('saving and restoring', () => {
+  const startFresh = () =>
+    store.setState({ templateChosen: false, floors: [], activeFloor: 0, floorCount: 1, floorCountChosen: false });
+
+  it('snapshots the live floor into its slot, so the save is whole', () => {
+    startFresh();
+    store.getState().setFloorCount(2);
+    store.getState().loadTemplate('studio');
+    store.getState().loadTemplate('one-bed');
+    // Edit floor 1 without switching away: its slot in floors[] is stale.
+    store.getState().applyOperation((plan) => ({ ok: true, plan: { ...plan }, changed: [], summary: 'nudge' }));
+
+    const saved = designSnapshot(store.getState());
+    expect(saved.floors).toHaveLength(2);
+    expect(saved.floors[0].plan).toBe(store.getState().plan);
+    expect(saved.floors[0].undoStack).toHaveLength(1);
+    expect(saved.floorCount).toBe(2);
+  });
+
+  it('loadDesign resumes a design without showing the picker', () => {
+    startFresh();
+    store.getState().loadTemplate('studio');
+    const saved = designSnapshot(store.getState());
+
+    startFresh();
+    expect(store.getState().templateChosen).toBe(false);
+
+    store.getState().loadDesign(saved);
+    expect(store.getState().templateChosen).toBe(true);
+    expect(store.getState().plan.rooms.map((room) => room.id)).toEqual(['main', 'bath', 'closet']);
+  });
+
+  it('newDesign returns to the very first picker step', () => {
+    startFresh();
+    store.getState().setFloorCount(2);
+    store.getState().loadTemplate('studio');
+    store.getState().loadTemplate('one-bed');
+
+    store.getState().newDesign();
+    expect(store.getState().templateChosen).toBe(false);
+    expect(store.getState().floorCountChosen).toBe(false);
+    expect(store.getState().floors).toEqual([]);
   });
 });

@@ -4,6 +4,8 @@ import type { OperationResult } from '../domain/operations';
 import { DEFAULT_TEMPLATE_ID, TEMPLATES, buildTemplate, templateById } from '../domain/templates';
 import type { Floorplan, Violation } from '../domain/types';
 import { validate } from '../domain/validate';
+import { clearSavedDesign, loadSavedDesign, saveDesign } from './persistence';
+import type { SavedDesign } from './persistence';
 
 const UNDO_LIMIT = 30;
 
@@ -72,6 +74,8 @@ export type FloorplanState = {
   loadTemplate: (templateId: string) => ToolEnvelope;
   setFloorCount: (count: number) => void;
   setActiveFloor: (index: number) => ToolEnvelope;
+  loadDesign: (design: SavedDesign) => void;
+  newDesign: () => void;
   armCatalog: (catalogId: string | null, color?: string) => void;
   select: (elementIds: string[]) => void;
   clearSelection: () => void;
@@ -102,18 +106,22 @@ function pushUndo(stack: Floorplan[], plan: Floorplan): Floorplan[] {
   return [...stack, plan].slice(-UNDO_LIMIT);
 }
 
+// A design saved by a previous visit resumes exactly where it left off; the
+// picker only shows for a genuinely fresh start.
+const restored = loadSavedDesign();
+
 export const floorplanStore = createStore<FloorplanState>()((set, get) => ({
-  plan: buildTemplate(DEFAULT_TEMPLATE_ID),
+  plan: restored?.plan ?? buildTemplate(DEFAULT_TEMPLATE_ID),
   selection: { elementIds: [], kind: null },
   camera: { mode: 'iso', targetRoomId: null, description: 'Looking down at the whole plan from the south-east.' },
-  undoStack: [],
+  undoStack: restored?.undoStack ?? [],
   variants: [],
-  templateId: DEFAULT_TEMPLATE_ID,
-  templateChosen: false,
-  floors: [],
-  activeFloor: 0,
-  floorCount: 1,
-  floorCountChosen: false,
+  templateId: restored?.templateId ?? DEFAULT_TEMPLATE_ID,
+  templateChosen: restored !== null,
+  floors: restored?.floors ?? [],
+  activeFloor: restored?.activeFloor ?? 0,
+  floorCount: restored?.floorCount ?? 1,
+  floorCountChosen: restored !== null,
   armed: null,
 
   applyOperation: (operation) => {
@@ -264,6 +272,40 @@ export const floorplanStore = createStore<FloorplanState>()((set, get) => ({
     };
   },
 
+  loadDesign: (design) =>
+    set({
+      plan: design.plan,
+      templateId: design.templateId,
+      templateChosen: true,
+      floors: design.floors,
+      activeFloor: design.activeFloor,
+      floorCount: design.floorCount,
+      floorCountChosen: true,
+      undoStack: design.undoStack,
+      variants: [],
+      selection: { elementIds: [], kind: null },
+      armed: null,
+    }),
+
+  newDesign: () => {
+    // Deliberate discard: the autosave goes too, or a reload would resurrect
+    // the design that was just thrown away.
+    clearSavedDesign();
+    set({
+      plan: buildTemplate(DEFAULT_TEMPLATE_ID),
+      templateId: DEFAULT_TEMPLATE_ID,
+      templateChosen: false,
+      floors: [],
+      activeFloor: 0,
+      floorCount: 1,
+      floorCountChosen: false,
+      undoStack: [],
+      variants: [],
+      selection: { elementIds: [], kind: null },
+      armed: null,
+    });
+  },
+
   armCatalog: (catalogId, color) =>
     set({ armed: catalogId === null ? null : { catalogId, ...(color === undefined ? {} : { color }) } }),
 
@@ -348,3 +390,43 @@ export const floorplanStore = createStore<FloorplanState>()((set, get) => ({
 export function useFloorplanStore<T>(selector: (state: FloorplanState) => T): T {
   return useStore(floorplanStore, selector);
 }
+
+/**
+ * The design as one saveable value. The active floor's live state is parked
+ * into its slot first, so the snapshot is whole even between floor switches.
+ */
+export function designSnapshot(state: FloorplanState): SavedDesign {
+  const live = { templateId: state.templateId, plan: state.plan, undoStack: state.undoStack };
+  const floors = state.floors.length > 0
+    ? state.floors.map((parked, index) => (index === state.activeFloor ? live : parked))
+    : [live];
+
+  return {
+    version: 1,
+    templateId: state.templateId,
+    floors,
+    activeFloor: state.activeFloor,
+    floorCount: floors.length,
+    plan: state.plan,
+    undoStack: state.undoStack,
+  };
+}
+
+// Autosave: every committed change writes through to this browser's storage.
+// Reference checks keep selection and camera churn from spamming writes, and
+// nothing is saved mid-setup -- half a picker flow is not a design.
+floorplanStore.subscribe((state, previous) => {
+  if (!state.templateChosen) {
+    return;
+  }
+  if (
+    state.plan === previous.plan &&
+    state.floors === previous.floors &&
+    state.activeFloor === previous.activeFloor &&
+    state.undoStack === previous.undoStack &&
+    state.templateChosen === previous.templateChosen
+  ) {
+    return;
+  }
+  saveDesign(designSnapshot(state));
+});
