@@ -73,14 +73,22 @@ function useSelected(id: string): boolean {
 /**
  * Selecting from the scene is the whole point of the WebMCP demo: it is what
  * `get_selection` reports back to the agent. Propagation stops so the click
- * lands on the nearest thing rather than every mesh behind it.
+ * lands on the nearest thing rather than every mesh behind it. Clicking the
+ * selected thing again puts it down -- a toggle needs no second gesture to
+ * learn, and empty floor is not always in reach to click instead.
  */
 function useSelect(id: string) {
   const select = useFloorplanStore((state) => state.select);
+  const clearSelection = useFloorplanStore((state) => state.clearSelection);
+  const selected = useSelected(id);
 
   return (event: ThreeEvent<MouseEvent>) => {
     event.stopPropagation();
-    select([id]);
+    if (selected) {
+      clearSelection();
+    } else {
+      select([id]);
+    }
   };
 }
 
@@ -735,11 +743,16 @@ function CameraRig({ plan, camera }: { plan: Floorplan; camera: Camera }) {
   const progress = useRef(1);
   const keys = useRef(new Set<string>());
 
+  // Re-fly only when the camera *request* changes -- a view button click or
+  // an agent's set_camera. Keying on the computed pose fired on every plan
+  // edit too (the pose derives from the plan), so rotating a chair re-framed
+  // the scene and threw away whatever zoom and pan the human had settled on.
   useEffect(() => {
     from.current.position.copy(three.position);
     from.current.target.copy(controls.current?.target ?? new THREE.Vector3());
     progress.current = 0;
-  }, [pose, three]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [camera, three]);
 
   // A standing eye wants a wide lens: 50deg is right for surveying the plan
   // from outside, but inside a 12ft room it reads as a telephoto crop and the
