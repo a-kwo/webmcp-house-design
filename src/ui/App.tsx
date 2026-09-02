@@ -16,6 +16,9 @@ export function App() {
   const armed = useFloorplanStore((state) => state.armed);
   const reset = useFloorplanStore((state) => state.reset);
   const undoDepth = useFloorplanStore((state) => state.undoStack.length);
+  const floorCount = useFloorplanStore((state) => state.floorCount);
+  const activeFloor = useFloorplanStore((state) => state.activeFloor);
+  const setActiveFloor = useFloorplanStore((state) => state.setActiveFloor);
   const [toolsReady, setToolsReady] = useState(false);
 
   useEffect(() => {
@@ -66,6 +69,23 @@ export function App() {
           Simplified residential constraints for hackathon demos. Not building
           code compliance.
         </p>
+        {floorCount > 1 ? (
+          <section>
+            <h2>Floors</h2>
+            <div className="floor-tabs">
+              {Array.from({ length: floorCount }, (_, index) => (
+                <button
+                  key={index}
+                  type="button"
+                  className={index === activeFloor ? 'active' : undefined}
+                  onClick={() => setActiveFloor(index)}
+                >
+                  Floor {index + 1}
+                </button>
+              ))}
+            </div>
+          </section>
+        ) : null}
         <section>
           <h2>Rooms</h2>
           <ul>

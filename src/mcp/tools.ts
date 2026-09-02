@@ -80,6 +80,11 @@ const schemas = {
 
   start_from_template: z.object({
     templateId: z.string().describe('One of the ids from list_templates.'),
+    floorCount: z.number().int().min(1).max(3).optional()
+      .describe('Total floors for a brand-new design. Give it on the first call, then call once per floor: each call sets the next floor\'s template.'),
+  }),
+  set_active_floor: z.object({
+    floor: z.number().int().min(1).describe('1-based floor number to edit; every tool then reads and writes that floor.'),
   }),
   add_room: z.object({
     name: z.string().describe('Human-facing name, e.g. "Guest Bedroom".'),
@@ -324,9 +329,12 @@ export async function registerFloorplanTools(
   // ---- read tools: these reflect live UI state, which is what makes this WebMCP.
   register('get_layout', 'Read the current floorplan. Defaults to a compact summary of rooms, areas and adjacency.', (input) => {
     const plan = state().plan;
+    // Which storey the answer describes; every tool reads and writes the
+    // active floor, so a multi-floor agent must know which one that is.
+    const floor = { active: state().activeFloor + 1, count: Math.max(1, state().floors.length || state().floorCount) };
     return input.detail === 'full'
-      ? { units: plan.units, ceilingHeight: plan.ceilingHeight, walls: plan.walls, rooms: plan.rooms, openings: plan.openings, furniture: plan.furniture }
-      : { units: plan.units, ceilingHeight: plan.ceilingHeight, rooms: summarise(plan) };
+      ? { units: plan.units, ceilingHeight: plan.ceilingHeight, floor, walls: plan.walls, rooms: plan.rooms, openings: plan.openings, furniture: plan.furniture }
+      : { units: plan.units, ceilingHeight: plan.ceilingHeight, floor, rooms: summarise(plan) };
   });
 
   register('get_selection', 'Read what the human currently has selected in the 3D scene.', () => describeSelection(state()));
@@ -355,8 +363,15 @@ export async function registerFloorplanTools(
   }));
 
   // ---- write tools: each returns the violations its own edit caused.
-  register('start_from_template', 'Start a fresh design from a template, replacing the current plan and its history.', (input) =>
-    envelope(state().loadTemplate(input.templateId)));
+  register('start_from_template', 'Start a design from a template. With floorCount, the first call sizes the house and each call fills the next floor.', (input) => {
+    if (input.floorCount !== undefined && !state().templateChosen) {
+      state().setFloorCount(input.floorCount);
+    }
+    return envelope(state().loadTemplate(input.templateId));
+  });
+
+  register('set_active_floor', 'Switch which floor of a multi-floor design is being edited, for every tool and the human alike.', (input) =>
+    envelope(state().setActiveFloor(input.floor - 1)));
 
   register('add_room', 'Add a room, optionally attached to an existing one so they share a wall.', (input) =>
     envelope(state().applyOperation((plan) => addRoom(plan, input))));

@@ -9,7 +9,14 @@ beforeEach(() => {
   // reset() honours whichever template a previous test started from; pin the
   // fixture, then furnish it -- templates ship unfurnished and several tests
   // exercise selection and clearance behaviour that needs furniture.
-  store.setState({ templateId: 'two-bed', templateChosen: false });
+  store.setState({
+    templateId: 'two-bed',
+    templateChosen: false,
+    floors: [],
+    activeFloor: 0,
+    floorCount: 1,
+    floorCountChosen: false,
+  });
   store.getState().reset();
   store.setState({ plan: JSON.parse(JSON.stringify(sampleFloorplan)) });
 });
@@ -191,3 +198,74 @@ describe('palette arming', () => {
   });
 });
 
+describe('floors', () => {
+  const startFresh = () =>
+    store.setState({ templateChosen: false, floors: [], activeFloor: 0, floorCount: 1, floorCountChosen: false });
+
+  /** An edit that changes nothing but still lands on the undo stack. */
+  const nudge = () =>
+    store.getState().applyOperation((plan) => ({ ok: true, plan: { ...plan }, changed: [], summary: 'nudge' }));
+
+  it('collects a template per floor, then opens on floor 1', () => {
+    startFresh();
+    store.getState().setFloorCount(2);
+
+    const first = store.getState().loadTemplate('studio');
+    expect(first.ok && first.summary).toContain('Floor 1 of 2');
+    // The picker stays up: the design is not started until every floor has a shell.
+    expect(store.getState().templateChosen).toBe(false);
+
+    const second = store.getState().loadTemplate('one-bed');
+    expect(second.ok).toBe(true);
+    expect(store.getState().templateChosen).toBe(true);
+    expect(store.getState().activeFloor).toBe(0);
+    expect(store.getState().templateId).toBe('studio');
+    expect(store.getState().plan.rooms.map((room) => room.id)).toEqual(['main', 'bath', 'closet']);
+  });
+
+  it('switching floors preserves each floor\'s plan and history', () => {
+    startFresh();
+    store.getState().setFloorCount(2);
+    store.getState().loadTemplate('studio');
+    store.getState().loadTemplate('one-bed');
+
+    nudge();
+    expect(store.getState().undoStack).toHaveLength(1);
+
+    const up = store.getState().setActiveFloor(1);
+    expect(up.ok && up.summary).toContain('floor 2 of 2');
+    expect(store.getState().plan.rooms.some((room) => room.id === 'kitchen')).toBe(true);
+    expect(store.getState().undoStack).toHaveLength(0);
+
+    const down = store.getState().setActiveFloor(0);
+    expect(down.ok).toBe(true);
+    expect(store.getState().plan.rooms.map((room) => room.id)).toEqual(['main', 'bath', 'closet']);
+    expect(store.getState().undoStack).toHaveLength(1);
+  });
+
+  it('refuses to switch beyond the floors that exist', () => {
+    startFresh();
+    store.getState().loadTemplate('studio');
+
+    const result = store.getState().setActiveFloor(1);
+    expect(result.ok).toBe(false);
+    expect(!result.ok && result.error).toContain('1 floor');
+  });
+
+  it('resets only the active floor', () => {
+    startFresh();
+    store.getState().setFloorCount(2);
+    store.getState().loadTemplate('studio');
+    store.getState().loadTemplate('one-bed');
+    store.getState().setActiveFloor(1);
+    nudge();
+
+    store.getState().reset();
+    expect(store.getState().undoStack).toHaveLength(0);
+    expect(store.getState().plan.rooms.some((room) => room.id === 'kitchen')).toBe(true);
+
+    // Floor 1 was never touched by the reset.
+    store.getState().setActiveFloor(0);
+    expect(store.getState().plan.rooms.map((room) => room.id)).toEqual(['main', 'bath', 'closet']);
+  });
+});

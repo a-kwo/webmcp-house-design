@@ -40,7 +40,14 @@ function fakeContext() {
 async function setup() {
   // reset() honours whichever template a previous test started from; pin the
   // fixture so every test sees the two-bedroom sample.
-  floorplanStore.setState({ templateId: 'two-bed', templateChosen: false });
+  floorplanStore.setState({
+    templateId: 'two-bed',
+    templateChosen: false,
+    floors: [],
+    activeFloor: 0,
+    floorCount: 1,
+    floorCountChosen: false,
+  });
   floorplanStore.getState().reset();
   // Templates ship unfurnished; these tests exercise clearance and furniture
   // behaviour, so they run against the furnished two-bed fixture.
@@ -63,7 +70,7 @@ describe('registration', () => {
       'list_templates', 'start_from_template',
       'add_room', 'move_wall', 'resize_room', 'add_opening', 'place_furniture',
       'move_furniture', 'update_opening', 'apply_edits', 'remove_element',
-      'set_camera', 'undo', 'propose_variants',
+      'set_camera', 'undo', 'propose_variants', 'set_active_floor',
     ]) {
       expect(context.tools.has(name)).toBe(true);
     }
@@ -381,5 +388,27 @@ describe('dynamic registration', () => {
 
     expect(result.ok).toBe(false);
     expect(result.error).toContain('get_layout');
+  });
+});
+
+describe('floors', () => {
+  it('sizes the house on the first call and fills floors in order', async () => {
+    const { call } = await setup();
+    floorplanStore.setState({ templateChosen: false, floors: [], activeFloor: 0, floorCount: 1, floorCountChosen: false });
+
+    const first = call('start_from_template', { templateId: 'studio', floorCount: 2 });
+    expect(first.ok).toBe(true);
+    expect(first.summary).toContain('Floor 1 of 2');
+
+    const second = call('start_from_template', { templateId: 'two-bed' });
+    expect(second.ok).toBe(true);
+    expect(call('get_layout').floor).toEqual({ active: 1, count: 2 });
+
+    const switched = call('set_active_floor', { floor: 2 });
+    expect(switched.ok).toBe(true);
+    expect(call('get_layout').floor).toEqual({ active: 2, count: 2 });
+    expect(call('get_layout').rooms.map((room: { id: string }) => room.id)).toContain('hall');
+
+    expect(call('set_active_floor', { floor: 5 }).ok).toBe(false);
   });
 });

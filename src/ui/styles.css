@@ -601,3 +601,40 @@ code {
   background: #2a3a55;
   outline: none;
 }
+
+.floor-count-card {
+  align-items: flex-start;
+}
+
+.floor-count-number {
+  color: #d8a657;
+  font-size: 34px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.floor-tabs {
+  display: flex;
+  gap: 6px;
+}
+
+.floor-tabs button {
+  background: transparent;
+  border: 1px solid #3a3a38;
+  border-radius: 6px;
+  color: #aaa59b;
+  cursor: pointer;
+  flex: 1;
+  font: inherit;
+  font-size: 12px;
+  padding: 6px 0;
+}
+
+.floor-tabs button:hover {
+  color: #e6e2d8;
+}
+
+.floor-tabs button.active {
+  border-color: #6ea8fe;
+  color: #e6e2d8;
+}
