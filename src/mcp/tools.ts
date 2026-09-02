@@ -329,7 +329,7 @@ export async function registerFloorplanTools(
   // ---- read tools: these reflect live UI state, which is what makes this WebMCP.
   register('get_layout', 'Read the current floorplan. Defaults to a compact summary of rooms, areas and adjacency.', (input) => {
     const plan = state().plan;
-    // Which storey the answer describes; every tool reads and writes the
+    // Which story the answer describes; every tool reads and writes the
     // active floor, so a multi-floor agent must know which one that is.
     const floor = { active: state().activeFloor + 1, count: Math.max(1, state().floors.length || state().floorCount) };
     return input.detail === 'full'

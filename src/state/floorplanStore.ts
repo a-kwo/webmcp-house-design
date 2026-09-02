@@ -37,7 +37,7 @@ export type ToolEnvelope =
   | { ok: true; changed: string[]; violations: Violation[]; summary: string }
   | { ok: false; error: string };
 
-/** One storey of the design, parked while another floor is being edited. */
+/** One story of the design, parked while another floor is being edited. */
 export type FloorRecord = {
   templateId: string;
   plan: Floorplan;

@@ -78,7 +78,7 @@ export function TemplatePicker() {
                 onPointerDown={() => setFloorCount(count)}
               >
                 <span className="floor-count-number">{count}</span>
-                <strong>{count === 1 ? 'Single storey' : `${count} floors`}</strong>
+                <strong>{count === 1 ? 'Single story' : `${count} floors`}</strong>
                 <span>{count === 1 ? 'Everything on one level.' : `Ground floor plus ${count - 1} more.`}</span>
               </button>
             ))}
