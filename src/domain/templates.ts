@@ -57,7 +57,7 @@ export const TEMPLATES: Template[] = [
       ],
       openings: [
         { id: 'entry', kind: 'door', at: { x: 0, y: 84 }, width: 36, swing: 'in-left' },
-        { id: 'living-kitchen', kind: 'archway', at: { x: 240, y: 84 }, width: 60, height: 84, swing: 'none' },
+        { id: 'living-kitchen', kind: 'archway', at: { x: 240, y: 84 }, width: 42, height: 84, swing: 'none' },
         { id: 'living-bed1', kind: 'door', at: { x: 66, y: 168 }, width: 32, swing: 'in-right' },
         // The bath is an ensuite off the bedroom; laundry hangs off the kitchen.
         { id: 'bed1-bath', kind: 'door', at: { x: 192, y: 222 }, width: 32, swing: 'in-left' },
@@ -83,7 +83,7 @@ export const TEMPLATES: Template[] = [
       ],
       openings: [
         { id: 'entry', kind: 'door', at: { x: 0, y: 108 }, width: 36, swing: 'in-left' },
-        { id: 'living-kitchen', kind: 'archway', at: { x: 216, y: 78 }, width: 60, height: 84, swing: 'none' },
+        { id: 'living-kitchen', kind: 'archway', at: { x: 216, y: 78 }, width: 42, height: 84, swing: 'none' },
         { id: 'living-bed1', kind: 'door', at: { x: 64, y: 180 }, width: 32, swing: 'in-right' },
         // On the hallway's side wall, not across its end: a door spanning the
         // end wall leaves the hallway unable to narrow at all without the door
