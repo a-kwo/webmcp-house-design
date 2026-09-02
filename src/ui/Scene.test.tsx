@@ -95,8 +95,9 @@ describe('variant bar', () => {
     render(<Harness />);
 
     expect(screen.getByText('Widen the hallway to clear 36in')).toBeDefined();
-    expect(screen.getByText('Take 6in from Bedroom 2.')).toBeDefined();
-    expect(screen.getAllByText(/issues?$/).length).toBe(2);
+    // Summaries live in the chip tooltips; the strip itself stays terse.
+    expect(screen.getByTitle(/Take 6in from Bedroom 2\./)).toBeDefined();
+    expect(screen.getByTitle(/Take 12in from Bedroom 2\./)).toBeDefined();
   });
 
   it('commits the variant behind the button that was pressed', () => {
@@ -107,7 +108,9 @@ describe('variant bar', () => {
     const before = floorplanStore.getState().plan;
 
     render(<Harness />);
-    fireEvent.click(screen.getAllByText('Apply')[1]);
+    // Apply commits whichever chip is previewed; point at the second first.
+    fireEvent.mouseEnter(screen.getByTitle(/Take 12in from Bedroom 2\./));
+    fireEvent.click(screen.getByText('Apply'));
 
     const after = floorplanStore.getState();
     expect(after.variants).toHaveLength(0);
@@ -123,11 +126,11 @@ describe('variant bar', () => {
     ]);
 
     const { container } = render(<Harness />);
-    fireEvent.mouseEnter(screen.getByText('Take 12in from Bedroom 2.'));
+    fireEvent.mouseEnter(screen.getByTitle(/Take 12in from Bedroom 2\./));
 
-    const active = container.querySelectorAll('.variant-card.active');
+    const active = container.querySelectorAll('.variant-chip.active');
     expect(active).toHaveLength(1);
-    expect(active[0].textContent).toContain('Take 12in from Bedroom 2.');
+    expect(active[0].getAttribute('title')).toContain('Take 12in from Bedroom 2.');
   });
 });
 

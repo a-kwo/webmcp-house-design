@@ -201,60 +201,75 @@ code {
 }
 
 .variant-bar {
-  background: #1b1b1a;
-  border-top: 1px solid #343434;
-  flex: 0 0 auto;
-  padding: 12px 16px 16px;
+  align-items: center;
+  background: rgba(23, 23, 23, 0.82);
+  border: 1px solid #343434;
+  border-radius: 8px;
+  display: flex;
+  gap: 6px;
+  left: 16px;
+  padding: 6px 8px;
+  position: absolute;
+  top: 62px;
 }
 
 .variant-goal {
   color: #d8a657;
   font-size: 12px;
-  letter-spacing: 0.02em;
-  margin: 0 0 10px;
-  text-transform: uppercase;
+  max-width: 240px;
+  overflow: hidden;
+  padding-right: 4px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.variant-cards {
-  display: flex;
-  gap: 10px;
-}
-
-.variant-card {
-  border: 1px solid #343434;
-  border-radius: 6px;
+.variant-chip {
+  background: transparent;
+  border: 1px solid #3d3d3b;
+  border-radius: 5px;
+  color: #cfc9bd;
   cursor: pointer;
-  flex: 1;
-  padding: 10px 12px;
+  font: inherit;
+  font-size: 12px;
+  min-width: 28px;
+  padding: 4px 8px;
 }
 
-.variant-card.active {
+.variant-chip.active {
   border-color: #d8a657;
+  color: #f0e7d2;
 }
 
-.variant-summary {
-  color: #e6e2d8;
-  font-size: 13px;
-  line-height: 1.4;
-  margin: 0 0 10px;
+.variant-issues {
+  color: #d98b8b;
+  font-size: 10px;
+  margin-left: 4px;
 }
 
-.variant-foot {
-  align-items: center;
-  display: flex;
-  justify-content: space-between;
-}
-
-.variant-card button {
+.variant-apply {
   background: #d8a657;
   border: 0;
-  border-radius: 4px;
+  border-radius: 5px;
   color: #1b1b1a;
   cursor: pointer;
   font: inherit;
   font-size: 12px;
   font-weight: 600;
   padding: 5px 12px;
+}
+
+.variant-dismiss {
+  background: transparent;
+  border: 0;
+  color: #777168;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  padding: 4px 6px;
+}
+
+.variant-dismiss:hover {
+  color: #e6e2d8;
 }
 
 .history-actions {

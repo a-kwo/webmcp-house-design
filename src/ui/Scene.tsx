@@ -1119,42 +1119,50 @@ export function VariantBar({
 }) {
   const variants = useFloorplanStore((state) => state.variants);
   const applyVariant = useFloorplanStore((state) => state.applyVariant);
+  const setVariants = useFloorplanStore((state) => state.setVariants);
 
   if (variants.length === 0) {
     return null;
   }
 
+  // A compact strip under the camera bar: the goal, one numbered chip per
+  // alternative (its summary lives in the tooltip), Apply for whichever is
+  // previewed, and a dismiss. The full-card bottom bar covered the plan the
+  // variants were about.
   return (
     <div className="variant-bar">
-      <p className="variant-goal">{variants[0].goal}</p>
-      <div className="variant-cards">
-        {variants.map((variant) => {
-          const issues = validate(variant.plan).length;
+      <span className="variant-goal" title={variants[0].goal}>{variants[0].goal}</span>
+      {variants.map((variant, index) => {
+        const issues = validate(variant.plan).length;
 
-          return (
-            <div
-              key={variant.id}
-              className={variant.id === previewId ? 'variant-card active' : 'variant-card'}
-              onMouseEnter={() => onPreview(variant.id)}
-              onClick={() => onPreview(variant.id)}
-            >
-              <p className="variant-summary">{variant.summary}</p>
-              <div className="variant-foot">
-                <code>{issues === 0 ? 'no issues' : `${issues} issue${issues === 1 ? '' : 's'}`}</code>
-                <button
-                  type="button"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    applyVariant(variant.id);
-                  }}
-                >
-                  Apply
-                </button>
-              </div>
-            </div>
-          );
-        })}
-      </div>
+        return (
+          <button
+            key={variant.id}
+            type="button"
+            className={variant.id === previewId ? 'variant-chip active' : 'variant-chip'}
+            title={issues === 0 ? variant.summary : `${variant.summary} (${issues} issue${issues === 1 ? '' : 's'})`}
+            onMouseEnter={() => onPreview(variant.id)}
+            onClick={() => onPreview(variant.id)}
+          >
+            {index + 1}
+            {issues > 0 ? <span className="variant-issues">{issues}</span> : null}
+          </button>
+        );
+      })}
+      <button
+        type="button"
+        className="variant-apply"
+        onClick={() => {
+          if (previewId) {
+            applyVariant(previewId);
+          }
+        }}
+      >
+        Apply
+      </button>
+      <button type="button" className="variant-dismiss" aria-label="Dismiss variants" onClick={() => setVariants([])}>
+        &#10005;
+      </button>
     </div>
   );
 }
@@ -1524,9 +1532,9 @@ export function Scene() {
         </EffectComposer>
       </Canvas>
       <CameraBar />
+      <VariantBar previewId={previewId} onPreview={setPreviewId} />
       <SelectionActions />
       </div>
-      <VariantBar previewId={previewId} onPreview={setPreviewId} />
     </div>
   );
 }
