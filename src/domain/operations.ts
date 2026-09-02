@@ -25,6 +25,14 @@ const MIN_ROOM_DIMENSION_IN = 24;
 // violation must still succeed and be reported by validate().
 const MIN_VIABLE_SPAN_IN = 6;
 const WALL_AGAINST_CLEARANCE_IN = 2;
+/**
+ * Half the thickest wall. Room polygons run along wall centrelines, so a
+ * piece standing at the polygon edge is half-buried in the wall; furniture
+ * must stop at the wall FACE instead.
+ */
+const WALL_FACE_INSET_IN = 3;
+/** Wall left beside an opening so its frame has something to nail to. */
+const OPENING_END_MARGIN_IN = 4;
 // Float slack, so a piece parked flush against a wall is not called outside it.
 const FIT_TOLERANCE_IN = 0.001;
 
@@ -59,6 +67,17 @@ function directionOffset(direction: Direction, magnitude: number): Point {
 
 function roomBox(plan: Floorplan, room: Room): Box {
   return boundingBox(roomPolygon(plan, room));
+}
+
+/** The room's usable interior: its box pulled in from centreline to wall face. */
+function interiorBox(plan: Floorplan, room: Room): Box {
+  const box = roomBox(plan, room);
+  return {
+    minX: box.minX + WALL_FACE_INSET_IN,
+    minY: box.minY + WALL_FACE_INSET_IN,
+    maxX: box.maxX - WALL_FACE_INSET_IN,
+    maxY: box.maxY - WALL_FACE_INSET_IN,
+  };
 }
 
 function uniqueId(plan: Floorplan, base: string): string {
@@ -361,9 +380,9 @@ export function addOpening(
     return fail(`An opening needs a positive width; ${input.widthIn}in snaps to ${width}in.`);
   }
 
-  if (offset < 0 || offset + width > span) {
+  if (offset < OPENING_END_MARGIN_IN || offset + width > span - OPENING_END_MARGIN_IN) {
     return fail(
-      `A ${width}in opening at offset ${offset}in does not fit on ${wall.id}, which is ${Math.round(span)}in long. Use an offset between 0 and ${Math.round(span - width)}in.`,
+      `A ${width}in opening at offset ${offset}in does not fit on ${wall.id}, which is ${Math.round(span)}in long: its frame needs ${OPENING_END_MARGIN_IN}in of wall at each end. Use an offset between ${OPENING_END_MARGIN_IN} and ${Math.round(span - width - OPENING_END_MARGIN_IN)}in.`,
     );
   }
 
@@ -420,7 +439,7 @@ export function addOpening(
 
 /** Places against the longest wall, backed up to it and facing into the room. */
 function autoPlacement(plan: Floorplan, room: Room, footprint: { w: number; d: number }): { position: Point; rotation: number } {
-  const box = roomBox(plan, room);
+  const box = interiorBox(plan, room);
   const centre = { x: (box.minX + box.maxX) / 2, y: (box.minY + box.maxY) / 2 };
   const width = box.maxX - box.minX;
 
@@ -462,11 +481,11 @@ export function placeFurniture(
     ? { x: snapToGrid(input.position.x, GRID_IN), y: snapToGrid(input.position.y, GRID_IN) }
     : auto.position;
 
-  const box = roomBox(next, target);
+  const box = interiorBox(next, target);
   const inside = position.x >= box.minX && position.x <= box.maxX && position.y >= box.minY && position.y <= box.maxY;
   if (!inside) {
     return fail(
-      `Position (${position.x}, ${position.y}) is outside ${room.name}, which spans x ${box.minX}-${box.maxX} and y ${box.minY}-${box.maxY}. Omit position to auto-place against a wall.`,
+      `Position (${position.x}, ${position.y}) is outside ${room.name}, whose usable interior spans x ${box.minX}-${box.maxX} and y ${box.minY}-${box.maxY} (walls are the boundary). Omit position to auto-place against a wall.`,
     );
   }
 
@@ -491,7 +510,7 @@ export function placeFurniture(
 
   if (!fits) {
     return fail(
-      `A ${input.footprint.w}x${input.footprint.d}in ${input.catalogId} at (${position.x}, ${position.y}) rotated ${rotation}deg spans x ${Math.round(spans.minX)}-${Math.round(spans.maxX)} and y ${Math.round(spans.minY)}-${Math.round(spans.maxY)}, which runs outside ${room.name} (x ${box.minX}-${box.maxX}, y ${box.minY}-${box.maxY}). Move it further in, rotate it, or use a smaller footprint.`,
+      `A ${input.footprint.w}x${input.footprint.d}in ${input.catalogId} at (${position.x}, ${position.y}) rotated ${rotation}deg spans x ${Math.round(spans.minX)}-${Math.round(spans.maxX)} and y ${Math.round(spans.minY)}-${Math.round(spans.maxY)}, which runs into the walls of ${room.name} (usable interior x ${box.minX}-${box.maxX}, y ${box.minY}-${box.maxY}). Move it further in, rotate it, or use a smaller footprint.`,
     );
   }
 
@@ -549,9 +568,11 @@ export function updateOpening(
   // Grow or shrink about the centre, then clamp back onto the wall.
   const centre = opening.offset + opening.width / 2;
   let offset = snapToGrid(centre - width / 2, GRID_IN);
-  offset = Math.min(Math.max(offset, 0), span - width);
-  if (offset < 0) {
-    return fail(`${opening.id} cannot reach ${width}in on ${wall.id}, which is only ${Math.round(span)}in long.`);
+  // The frame keeps its end margins: clamp inside them, and refuse when the
+  // wall cannot carry the width at all.
+  offset = Math.min(Math.max(offset, OPENING_END_MARGIN_IN), span - width - OPENING_END_MARGIN_IN);
+  if (offset < OPENING_END_MARGIN_IN) {
+    return fail(`${opening.id} cannot reach ${width}in on ${wall.id}, which is only ${Math.round(span)}in long with ${OPENING_END_MARGIN_IN}in kept at each end for the frame.`);
   }
 
   const clash = openingsOnWall(plan, wall)
@@ -644,7 +665,7 @@ export function moveFurniture(
     );
   }
 
-  const box = roomBox(next, room);
+  const box = interiorBox(next, room);
   const spans = boundingBox(furniturePolygon({ ...item, position, rotation }));
   const fits =
     spans.minX >= box.minX - FIT_TOLERANCE_IN &&
@@ -654,7 +675,7 @@ export function moveFurniture(
 
   if (!fits) {
     return fail(
-      `The ${item.catalogId} at (${position.x}, ${position.y}) rotated ${rotation}deg spans x ${Math.round(spans.minX)}-${Math.round(spans.maxX)} and y ${Math.round(spans.minY)}-${Math.round(spans.maxY)}, which runs outside ${room.name} (x ${box.minX}-${box.maxX}, y ${box.minY}-${box.maxY}). Keep it further from the walls or rotate it.`,
+      `The ${item.catalogId} at (${position.x}, ${position.y}) rotated ${rotation}deg spans x ${Math.round(spans.minX)}-${Math.round(spans.maxX)} and y ${Math.round(spans.minY)}-${Math.round(spans.maxY)}, which runs into the walls of ${room.name} (usable interior x ${box.minX}-${box.maxX}, y ${box.minY}-${box.maxY}). Keep it further from the walls or rotate it.`,
     );
   }
 

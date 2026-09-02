@@ -344,7 +344,7 @@ describe('cameraPose', () => {
     // would leave 63in of room ahead, which fills the frame with wall.
     expect(pose.position[0]).toBeCloseTo(372);
     expect(pose.position[0]).toBeLessThan(384);
-    expect(pose.position[2]).toBeCloseTo(222);
+    expect(pose.position[2]).toBeCloseTo(210);
   });
 
   it('falls back to the first room when the target is unknown', () => {

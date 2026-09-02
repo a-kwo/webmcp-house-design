@@ -185,7 +185,7 @@ describe('selection actions', () => {
     // Park the bed against Bedroom 1's west wall; turned 90deg its 80in side
     // would poke through it.
     floorplanStore.getState().applyOperation((plan) =>
-      moveFurniture(plan, { furnitureId: 'bed-1', position: { x: 30, y: 252 } }),
+      moveFurniture(plan, { furnitureId: 'bed-1', position: { x: 36, y: 252 } }),
     );
     floorplanStore.getState().select(['bed-1']);
     render(<SelectionActions />);
@@ -194,6 +194,6 @@ describe('selection actions', () => {
 
     const bed = floorplanStore.getState().plan.furniture.find((item) => item.id === 'bed-1')!;
     expect(bed.rotation).toBe(0);
-    expect(screen.getByText(/runs outside/)).toBeDefined();
+    expect(screen.getByText(/runs into the walls/)).toBeDefined();
   });
 });

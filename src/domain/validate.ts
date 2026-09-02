@@ -322,9 +322,21 @@ function validateDoorSwingClashes(plan: Floorplan): Violation[] {
   return violations;
 }
 
+/** Seats tuck under work surfaces: that overlap is the arrangement working,
+ * not a clash. A chair pushed into its table must not raise a violation. */
+const TUCKING_SEATS = new Set(['chair']);
+const TUCK_UNDER_SURFACES = new Set(['table', 'desk', 'kitchen-island', 'counter']);
+
+function tucksUnder(a: Furniture, b: Furniture): boolean {
+  return (
+    (TUCKING_SEATS.has(a.catalogId) && TUCK_UNDER_SURFACES.has(b.catalogId)) ||
+    (TUCKING_SEATS.has(b.catalogId) && TUCK_UNDER_SURFACES.has(a.catalogId))
+  );
+}
+
 function validateFurnitureOverlap(plan: Floorplan, reportedPairs: Set<string>): Violation[] {
   return pairwise(plan.furniture)
-    .filter(([a, b]) => a.roomId === b.roomId && !reportedPairs.has(pairKey(a.id, b.id)))
+    .filter(([a, b]) => a.roomId === b.roomId && !reportedPairs.has(pairKey(a.id, b.id)) && !tucksUnder(a, b))
     .flatMap(([a, b]) => {
       const footprintsCollide = convexPolygonsOverlap(furniturePolygon(a), furniturePolygon(b));
       const clearanceCollides = convexPolygonsOverlap(furniturePolygon(a, true), furniturePolygon(b, true));

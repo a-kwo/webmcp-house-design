@@ -92,9 +92,9 @@ describe('moveWall', () => {
   });
 
   it('refuses a move that would leave a door hanging off a shortened wall', () => {
-    // Pulling y = 180 north shortens living-E-2, the living/hallway wall, from
-    // 36in to 24in -- but the living-hall door needs 34in of it.
-    const error = expectFail(moveWall(sampleFloorplan, { wallId: 'living-S', distanceIn: 12, direction: 'north' }));
+    // Pulling y = 180 north 36in shortens living-E-2, the living/hallway
+    // wall, from 60in to 24in -- but the living-hall door runs to 46in of it.
+    const error = expectFail(moveWall(sampleFloorplan, { wallId: 'living-S', distanceIn: 36, direction: 'north' }));
 
     expect(error).toContain('living-hall');
     expect(error).toContain('hanging off the end');
@@ -214,7 +214,7 @@ describe('addOpening', () => {
   it('rejects an opening that runs off the end of the wall', () => {
     const error = expectFail(addOpening(sampleFloorplan, { wallId: 'living-S', kind: 'door', offsetIn: 120, widthIn: 36 }));
     expect(error).toContain('does not fit');
-    expect(error).toMatch(/offset between 0 and \d+in/);
+    expect(error).toMatch(/offset between 4 and \d+in/);
   });
 
   it('resolves an egress violation once a window is added', () => {
@@ -235,10 +235,19 @@ describe('addOpening', () => {
   });
 
   it('reports the overlap in the offsets of the wall being cut', () => {
-    const error = expectFail(addOpening(sampleFloorplan, { wallId: 'hall-E', kind: 'door', offsetIn: 84, widthIn: 30 }));
+    const error = expectFail(addOpening(sampleFloorplan, { wallId: 'hall-E', kind: 'door', offsetIn: 96, widthIn: 30 }));
 
     expect(error).toContain('would overlap hall-bed2');
-    expect(error).toMatch(/76in to 108in/);
+    expect(error).toMatch(/100in to 132in/);
+  });
+
+  it('keeps an opening frame margin at the wall ends', () => {
+    // living-S over bed1 runs 132in; a 36in door at offset 2 leaves no wall
+    // beside the frame, at offset 4 it just fits.
+    const error = expectFail(addOpening(sampleFloorplan, { wallId: 'living-S', kind: 'door', offsetIn: 2, widthIn: 36 }));
+    expect(error).toContain('frame');
+
+    expectOk(addOpening(sampleFloorplan, { wallId: 'living-S', kind: 'door', offsetIn: 4, widthIn: 36 }));
   });
 
   it('allows an opening that only touches the edge of another', () => {
@@ -295,7 +304,7 @@ describe('placeFurniture', () => {
       position: { x: 60, y: 186 },
     }));
 
-    expect(error).toContain('runs outside Bedroom 1');
+    expect(error).toContain('runs into the walls of Bedroom 1');
     expect(error).toMatch(/spans x \d+-\d+ and y \d+-\d+/);
   });
 
@@ -392,11 +401,25 @@ describe('moveFurniture', () => {
     expect(bed.position).toEqual(sampleFloorplan.furniture.find((item) => item.id === 'bed-2')!.position);
   });
 
+  it('keeps furniture off the wall faces, not just off the centrelines', () => {
+    // Room polygons run along wall centrelines; a 60in bed centred at x = 30
+    // spans exactly to the polygon edge and used to sit 3in deep in the wall.
+    const error = expectFail(placeFurniture(sampleFloorplan, {
+      roomId: 'bed1', catalogId: 'queen-bed', footprint: { w: 60, d: 80 }, position: { x: 30, y: 240 },
+    }));
+    expect(error).toContain('runs into the walls');
+
+    // Nudged one grid step in, it clears the face and lands.
+    expectOk(placeFurniture(sampleFloorplan, {
+      roomId: 'bed1', catalogId: 'queen-bed', footprint: { w: 60, d: 80 }, position: { x: 36, y: 240 },
+    }));
+  });
+
   it('refuses a landing spot whose footprint runs out of the room', () => {
     // Centre inside the bathroom, but the 80in-deep bed pokes past its north wall.
     const error = expectFail(moveFurniture(sampleFloorplan, { furnitureId: 'bed-1', position: { x: 174, y: 210 } }));
 
-    expect(error).toContain('runs outside Bathroom');
+    expect(error).toContain('runs into the walls of Bathroom');
   });
 
   it('refuses a position outside every room', () => {
@@ -565,7 +588,7 @@ describe('addRoom', () => {
 
   it('refuses to split a wall where the cut would land on an opening', () => {
     const error = expectFail(addRoom(sampleFloorplan, {
-      name: 'Porch', type: 'utility', widthIn: 72, depthIn: 72,
+      name: 'Porch', type: 'utility', widthIn: 72, depthIn: 108,
       attachTo: { roomId: 'bed2', side: 'east' },
     }));
 

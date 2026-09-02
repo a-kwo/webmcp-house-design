@@ -75,11 +75,11 @@ export const TEMPLATES: Template[] = [
     spec: {
       rooms: [
         { id: 'living', name: 'Living Room', type: 'living', x: 0, y: 0, w: 216, d: 180 },
-        { id: 'kitchen', name: 'Kitchen', type: 'kitchen', x: 216, y: 0, w: 168, d: 144, wetWalls: ['E'] },
-        { id: 'hall', name: 'Hallway', type: 'hallway', x: 216, y: 144, w: 42, d: 156 },
+        { id: 'kitchen', name: 'Kitchen', type: 'kitchen', x: 216, y: 0, w: 168, d: 120, wetWalls: ['E'] },
+        { id: 'hall', name: 'Hallway', type: 'hallway', x: 216, y: 120, w: 42, d: 180 },
         { id: 'bed1', name: 'Bedroom 1', type: 'bedroom', x: 0, y: 180, w: 132, d: 120 },
         { id: 'bath', name: 'Bathroom', type: 'bathroom', x: 132, y: 180, w: 84, d: 120, wetWalls: ['E'] },
-        { id: 'bed2', name: 'Bedroom 2', type: 'bedroom', x: 258, y: 144, w: 126, d: 156 },
+        { id: 'bed2', name: 'Bedroom 2', type: 'bedroom', x: 258, y: 120, w: 126, d: 180 },
       ],
       openings: [
         { id: 'entry', kind: 'door', at: { x: 0, y: 108 }, width: 36, swing: 'in-left' },
@@ -88,7 +88,7 @@ export const TEMPLATES: Template[] = [
         // On the hallway's side wall, not across its end: a door spanning the
         // end wall leaves the hallway unable to narrow at all without the door
         // running off the wall it sits in.
-        { id: 'living-hall', kind: 'door', at: { x: 216, y: 162 }, width: 32, swing: 'in-left' },
+        { id: 'living-hall', kind: 'door', at: { x: 216, y: 150 }, width: 32, swing: 'in-left' },
         { id: 'hall-bath', kind: 'door', at: { x: 216, y: 237 }, width: 30, swing: 'in-left' },
         { id: 'hall-bed2', kind: 'door', at: { x: 258, y: 236 }, width: 32, swing: 'in-right' },
         { id: 'bed1-window', kind: 'window', at: { x: 0, y: 246 }, width: 36 },

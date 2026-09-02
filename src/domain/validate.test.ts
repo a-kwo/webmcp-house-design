@@ -341,6 +341,38 @@ describe('door swing rules', () => {
   });
 });
 
+
+describe('tucked seating', () => {
+  const withPieces = (extra: object[]) => ({
+    ...sampleFloorplan,
+    furniture: [...sampleFloorplan.furniture, ...extra],
+  } as typeof sampleFloorplan);
+
+  it('lets a chair tuck under a table without raising an overlap', () => {
+    const plan = withPieces([
+      { id: 'table-t', catalogId: 'table', roomId: 'living', position: { x: 150, y: 120 }, rotation: 0, footprint: { w: 48, d: 30 } },
+      // Pushed in: the chair's footprint overlaps the table's.
+      { id: 'chair-t', catalogId: 'chair', roomId: 'living', position: { x: 150, y: 138 }, rotation: 180, footprint: { w: 22, d: 22 } },
+    ]);
+
+    const codes = validate(plan)
+      .filter((violation) => violation.elementIds.includes('chair-t'))
+      .map((violation) => violation.code);
+    expect(codes).not.toContain('FURNITURE_OVERLAP');
+  });
+
+  it('still flags a chair buried in something that is not a surface', () => {
+    const plan = withPieces([
+      { id: 'chair-x', catalogId: 'chair', roomId: 'living', position: { x: 72, y: 72 }, rotation: 0, footprint: { w: 22, d: 22 } },
+    ]);
+
+    const overlap = validate(plan).find(
+      (violation) => violation.code === 'FURNITURE_OVERLAP' && violation.elementIds.includes('chair-x'),
+    );
+    expect(overlap).toBeDefined();
+  });
+});
+
 describe('structural rules', () => {
   it('stays silent without a previous plan to compare against', () => {
     const plan = clonePlan(sampleFloorplan);
@@ -383,7 +415,7 @@ describe('structural rules', () => {
 
     const pieces = result.plan.walls.filter((wall) => wall.id.startsWith('bed2-E'));
     expect(pieces).toHaveLength(2);
-    expect(pieces.reduce((sum, wall) => sum + Math.abs(wall.end.y - wall.start.y), 0)).toBe(156);
+    expect(pieces.reduce((sum, wall) => sum + Math.abs(wall.end.y - wall.start.y), 0)).toBe(180);
 
     expect(codes(result.plan, sampleFloorplan)).not.toContain('LOAD_BEARING_REMOVED');
   });
