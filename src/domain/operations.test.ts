@@ -639,3 +639,41 @@ describe('resizeFurniture', () => {
     expect(expectFail(resizeFurniture(sampleFloorplan, { furnitureId: 'ghost', widthIn: 40 }))).toContain('No furniture');
   });
 });
+
+describe('placement facing', () => {
+  it('faces a piece into the room from the wall it is placed against', () => {
+    // Wardrobe backed to bed1's south wall: front should turn north.
+    const south = expectOk(placeFurniture(sampleFloorplan, {
+      roomId: 'bed2', catalogId: 'wardrobe', footprint: { w: 48, d: 24 }, position: { x: 324, y: 282 },
+    }));
+    expect(south.plan.furniture.slice(-1)[0]!.rotation).toBe(180);
+
+    const west = expectOk(placeFurniture(sampleFloorplan, {
+      roomId: 'bed2', catalogId: 'dresser', footprint: { w: 36, d: 20 }, position: { x: 274, y: 200 },
+    }));
+    expect(west.plan.furniture.slice(-1)[0]!.rotation).toBe(270);
+  });
+
+  it('keeps the plain south default in open floor', () => {
+    const result = expectOk(placeFurniture(sampleFloorplan, {
+      roomId: 'living', catalogId: 'table', footprint: { w: 48, d: 30 }, position: { x: 108, y: 90 },
+    }));
+    expect(result.plan.furniture.slice(-1)[0]!.rotation).toBe(0);
+  });
+
+  it('falls back to south when the turned footprint cannot fit', () => {
+    // A queen bed beside the west wall: turned east it would be 80in wide and
+    // poke through the wall, so it stays at 0 rather than failing.
+    const result = expectOk(placeFurniture(sampleFloorplan, {
+      roomId: 'bed1', catalogId: 'queen-bed', footprint: { w: 60, d: 80 }, position: { x: 36, y: 240 },
+    }));
+    expect(result.plan.furniture.slice(-1)[0]!.rotation).toBe(0);
+  });
+
+  it('an explicit rotation is always honoured', () => {
+    const result = expectOk(placeFurniture(sampleFloorplan, {
+      roomId: 'bed2', catalogId: 'wardrobe', footprint: { w: 48, d: 24 }, position: { x: 324, y: 282 }, rotation: 0,
+    }));
+    expect(result.plan.furniture.slice(-1)[0]!.rotation).toBe(0);
+  });
+});

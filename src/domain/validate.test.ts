@@ -431,3 +431,31 @@ describe('structural rules', () => {
     expect(codes(plan, sampleFloorplan)).not.toContain('LOAD_BEARING_REMOVED');
   });
 });
+
+describe('facing the wall', () => {
+  const withPiece = (rotation: number) => ({
+    ...sampleFloorplan,
+    furniture: [...sampleFloorplan.furniture,
+      { id: 'wardrobe-x', catalogId: 'wardrobe', roomId: 'bed2', position: { x: 324, y: 282 }, rotation, footprint: { w: 48, d: 24 }, clearanceFront: 30 },
+    ],
+  } as typeof sampleFloorplan);
+
+  it('flags a front-opening piece staring at a wall', () => {
+    // Backed to the south wall but facing it: doors open onto plaster.
+    const violation = validate(withPiece(0)).find((candidate) => candidate.code === 'FACING_WALL');
+
+    expect(violation).toBeDefined();
+    expect(violation?.severity).toBe('warning');
+    expect(violation?.message).toContain('wardrobe');
+    expect(violation?.suggestion).toContain('180');
+  });
+
+  it('passes the same piece turned to face the room', () => {
+    expect(validate(withPiece(180)).some((candidate) => candidate.code === 'FACING_WALL')).toBe(false);
+  });
+
+  it('leaves beds and sofas alone; closeness is an arrangement choice', () => {
+    // The fixture bed's foot stands 8in from the wall and that is fine.
+    expect(validate(sampleFloorplan).some((candidate) => candidate.code === 'FACING_WALL')).toBe(false);
+  });
+});

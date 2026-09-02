@@ -437,6 +437,25 @@ export function addOpening(
   };
 }
 
+/**
+ * The rotation that faces a piece into the room from wherever it stands:
+ * when the position reads as backed against a wall -- centre within half the
+ * footprint's depth plus a hand's width -- the front turns away from that
+ * wall. In open floor the piece faces plan-south, the default a human
+ * placing there expects.
+ */
+function inwardRotation(box: Box, position: Point, footprint: { w: number; d: number }): number {
+  const reach = footprint.d / 2 + 6;
+  const gaps: { rotation: number; gap: number }[] = [
+    { rotation: 0, gap: position.y - box.minY },    // backed to the north wall, facing south
+    { rotation: 180, gap: box.maxY - position.y },  // backed to the south wall, facing north
+    { rotation: 270, gap: position.x - box.minX },  // backed to the west wall, facing east
+    { rotation: 90, gap: box.maxX - position.x },   // backed to the east wall, facing west
+  ];
+  const nearest = gaps.reduce((best, candidate) => (candidate.gap < best.gap ? candidate : best));
+  return nearest.gap <= reach ? nearest.rotation : 0;
+}
+
 /** Places against the longest wall, backed up to it and facing into the room. */
 function autoPlacement(plan: Floorplan, room: Room, footprint: { w: number; d: number }): { position: Point; rotation: number } {
   const box = interiorBox(plan, room);
@@ -489,19 +508,43 @@ export function placeFurniture(
     );
   }
 
-  const rotation = input.rotation ?? (input.position ? 0 : auto.rotation);
-  const corners = furniturePolygon({
+  // An explicit position without a rotation gets faced into the room from
+  // the wall it stands against, not a blanket plan-south: agents drop
+  // wardrobes along the south wall and a south-facing default stares them
+  // into it. When the turned footprint cannot fit -- a long bed beside a
+  // side wall -- the piece falls back to facing south rather than failing.
+  const fitsAt = (candidate: number): boolean => {
+    const spansAt = boundingBox(furniturePolygon({
+      id: 'probe',
+      catalogId: input.catalogId,
+      roomId: room.id,
+      position,
+      rotation: candidate,
+      footprint: input.footprint,
+    }));
+    return (
+      spansAt.minX >= box.minX - FIT_TOLERANCE_IN &&
+      spansAt.maxX <= box.maxX + FIT_TOLERANCE_IN &&
+      spansAt.minY >= box.minY - FIT_TOLERANCE_IN &&
+      spansAt.maxY <= box.maxY + FIT_TOLERANCE_IN
+    );
+  };
+
+  const inward = inwardRotation(box, position, input.footprint);
+  const rotation = input.rotation ?? (input.position
+    ? (fitsAt(inward) || !fitsAt(0) ? inward : 0)
+    : auto.rotation);
+
+  // The centre being inside says nothing about the piece: a 80in bed centred
+  // 6in from the wall still hangs most of itself into the next room.
+  const spans = boundingBox(furniturePolygon({
     id: 'probe',
     catalogId: input.catalogId,
     roomId: room.id,
     position,
     rotation,
     footprint: input.footprint,
-  });
-
-  // The centre being inside says nothing about the piece: a 80in bed centred
-  // 6in from the wall still hangs most of itself into the next room.
-  const spans = boundingBox(corners);
+  }));
   const fits =
     spans.minX >= box.minX - FIT_TOLERANCE_IN &&
     spans.maxX <= box.maxX + FIT_TOLERANCE_IN &&

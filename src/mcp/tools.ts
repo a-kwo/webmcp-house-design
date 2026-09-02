@@ -117,7 +117,7 @@ const schemas = {
     footprint: z.object({ w: z.number(), d: z.number() }).describe('Plan footprint in inches.'),
     position: z.object({ x: z.number(), y: z.number() }).optional()
       .describe('Omit to auto-place against the most sensible wall.'),
-    rotation: z.number().optional().describe('Degrees; 0 faces the bottom of the plan.'),
+    rotation: z.number().optional().describe('Degrees a piece\'s front faces: 0 = south (plan bottom), 90 = west, 180 = north, 270 = east. Face it away from the wall it backs onto. Omitted on placement, it auto-faces into the room from the nearest wall.'),
     clearanceFrontIn: z.number().optional().describe('Approach space required in front of the piece.'),
     color: z.string().optional().describe('Finish for the primary surfaces, any CSS colour; omit for the default look.'),
   }),
@@ -130,7 +130,7 @@ const schemas = {
     furnitureId: z.string(),
     position: z.object({ x: z.number(), y: z.number() }).optional()
       .describe('New centre in plan inches; the room it lands in is inferred.'),
-    rotation: z.number().optional().describe('Degrees; 0 faces the bottom of the plan.'),
+    rotation: z.number().optional().describe('Degrees a piece\'s front faces: 0 = south (plan bottom), 90 = west, 180 = north, 270 = east. Face it away from the wall it backs onto. Omitted on placement, it auto-faces into the room from the nearest wall.'),
   }),
   update_opening: z.object({
     openingId: z.string(),

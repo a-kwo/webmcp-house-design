@@ -4,6 +4,7 @@ import {
   convexPolygonsOverlap,
   distance,
   doorSwingPolygon,
+  facingVector,
   furniturePolygon,
   pointToSegmentDistance,
   polygonCentroid,
@@ -51,6 +52,7 @@ export function validate(plan: Floorplan, previous?: Floorplan): Violation[] {
     ...validateWetWalls(plan),
     ...validateDoorSwingClashes(plan),
     ...validateFurnitureOverlap(plan, toiletPairs),
+    ...validateFacing(plan),
     ...validateReachability(plan),
     ...validateStructuralWalls(plan, previous),
   ];
@@ -353,6 +355,64 @@ function validateFurnitureOverlap(plan: Floorplan, reportedPairs: Set<string>): 
           : `The ${a.catalogId} and the ${b.catalogId} clear each other in ${roomName(plan, a.roomId)}, but their approach zones overlap.`,
         elementIds: [a.id, b.id],
         suggestion: `Move one of them, or drop the approach clearance if the pieces are not used at the same time.`,
+      }];
+    });
+}
+
+
+/** How far a ray from `origin` along `direction` travels before leaving `box`. */
+function distanceToBox(box: Box, origin: Point, direction: Point): number {
+  let travel = Number.POSITIVE_INFINITY;
+  if (Math.abs(direction.x) > 1e-6) {
+    travel = Math.min(travel, (direction.x > 0 ? box.maxX - origin.x : origin.x - box.minX) / Math.abs(direction.x));
+  }
+  if (Math.abs(direction.y) > 1e-6) {
+    travel = Math.min(travel, (direction.y > 0 ? box.maxY - origin.y : origin.y - box.minY) / Math.abs(direction.y));
+  }
+  return travel;
+}
+
+/** Pieces whose front is doors, drawers or a screen: facing a wall defeats
+ * them. A bed or sofa close to a wall is just an arrangement choice. */
+const OPENING_FRONTS = new Set([
+  'wardrobe', 'closet', 'dresser', 'nightstand', 'bookshelf', 'fridge',
+  'refrigerator', 'range', 'dishwasher', 'washer', 'dryer', 'desk',
+  'tv-stand', 'tv', 'tv-wall',
+]);
+
+/**
+ * A front-opening piece staring at a wall: its doors and drawers open onto
+ * plaster. The check casts from the front face along the facing direction --
+ * a piece backed against a wall faces the room and passes; one turned into
+ * the wall has almost no run before the room ends.
+ */
+function validateFacing(plan: Floorplan): Violation[] {
+  return plan.furniture
+    .filter((item) => OPENING_FRONTS.has(item.catalogId))
+    .flatMap((item) => {
+      const room = plan.rooms.find((candidate) => candidate.id === item.roomId);
+      if (!room) {
+        return [];
+      }
+
+      const facing = facingVector(item.rotation);
+      const front = {
+        x: item.position.x + facing.x * (item.footprint.d / 2),
+        y: item.position.y + facing.y * (item.footprint.d / 2),
+      };
+      const run = distanceToBox(boundingBox(roomPolygon(plan, room)), front, facing);
+      const needed = 12;
+
+      if (run >= needed) {
+        return [];
+      }
+
+      return [{
+        code: 'FACING_WALL' as const,
+        severity: 'warning' as const,
+        message: `The ${item.catalogId} in ${roomName(plan, item.roomId)} faces a wall ${Math.max(0, Math.round(run))}in away; its front cannot open.`,
+        elementIds: [item.id, item.roomId],
+        suggestion: `Turn the ${item.catalogId} to face the room -- rotating it 180deg usually does it.`,
       }];
     });
 }
