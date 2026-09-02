@@ -562,7 +562,9 @@ function Bookshelf({ w, d, h, tint }: ModelProps) {
       <Part z={-d / 2 + 0.6} y={h / 2} sx={w} sy={h} sz={1.2} color={DARK_WOOD} roughness={0.65} />
       <Part x={-w / 2 + 1} y={h / 2} sx={2} sy={h} sz={d} color={wood} roughness={0.6} />
       <Part x={w / 2 - 1} y={h / 2} sx={2} sy={h} sz={d} color={wood} roughness={0.6} />
-      <Part y={h - 1} sx={w} sy={2} sz={d} color={wood} roughness={0.6} />
+      {/* The top board caps the carcass a hair proud of the sides and back,
+          whose tops would otherwise share its plane and shimmer. */}
+      <Part y={h - 0.9} sx={w} sy={2} sz={d} color={wood} roughness={0.6} />
       <Part y={1} sx={w} sy={2} sz={d} color={wood} roughness={0.6} />
       {Array.from({ length: shelves }, (_, index) => (
         <Part key={index} y={2 + bay * index + 0.75} sx={w - 4} sy={1.5} sz={d - 1} color={wood} roughness={0.6} />
@@ -686,8 +688,10 @@ function Wardrobe({ w, d, h, tint }: ModelProps) {
   return (
     <>
       <Part y={h / 2} sx={w} sy={h} sz={d} color={wood} roughness={0.6} radius={0.9} />
-      {/* Crown, plinth, two proud door panels and long bar handles. */}
-      <Part y={h - 1} sx={w + 1.6} sy={2} sz={d + 1.2} color={DARK_WOOD} roughness={0.55} radius={0.6} />
+      {/* Crown, plinth, two proud door panels and long bar handles. The crown
+          tops out a hair above the body: two up-facing surfaces sharing the
+          exact same plane z-fight into fuzz when seen from overhead. */}
+      <Part y={h - 0.8} sx={w + 1.6} sy={2} sz={d + 1.2} color={DARK_WOOD} roughness={0.55} radius={0.6} />
       <Part y={1.2} sx={w + 1} sy={2.4} sz={d + 0.8} color={DARK_WOOD} roughness={0.55} />
       {[-1, 1].map((side) => (
         <Part key={side} x={side * w * 0.24} z={d / 2 + 0.25} y={h * 0.5} sx={w * 0.44} sy={h * 0.88} sz={0.5} color={wood} roughness={0.55} radius={0.5} />

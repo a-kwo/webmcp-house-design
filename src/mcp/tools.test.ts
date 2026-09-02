@@ -70,7 +70,7 @@ describe('registration', () => {
       'list_templates', 'start_from_template',
       'add_room', 'move_wall', 'resize_room', 'add_opening', 'place_furniture',
       'move_furniture', 'update_opening', 'apply_edits', 'remove_element',
-      'set_camera', 'undo', 'propose_variants', 'set_active_floor',
+      'set_camera', 'undo', 'propose_variants', 'set_active_floor', 'resize_furniture',
     ]) {
       expect(context.tools.has(name)).toBe(true);
     }
@@ -410,5 +410,18 @@ describe('floors', () => {
     expect(call('get_layout').rooms.map((room: { id: string }) => room.id)).toContain('hall');
 
     expect(call('set_active_floor', { floor: 5 }).ok).toBe(false);
+  });
+});
+
+describe('resize_furniture', () => {
+  it('resizes through the same envelope as every other write', async () => {
+    const { call } = await setup();
+    const result = call('resize_furniture', { furnitureId: 'sofa-1', widthIn: 72 });
+
+    expect(result.ok).toBe(true);
+    expect(result.summary).toContain('72x36in');
+
+    const full = call('get_layout', { detail: 'full' });
+    expect(full.furniture.find((item: { id: string }) => item.id === 'sofa-1').footprint.w).toBe(72);
   });
 });

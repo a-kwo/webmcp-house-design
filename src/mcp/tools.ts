@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { zodToJsonSchema } from 'zod-to-json-schema';
 import { boundingBox, coincidentWalls, computeRoomSummaries, roomDimensions, roomPolygon } from '../domain/geometry';
-import { addOpening, addRoom, moveFurniture, moveWall, placeFurniture, removeElement, resizeRoom, updateOpening } from '../domain/operations';
+import { addOpening, addRoom, moveFurniture, moveWall, placeFurniture, removeElement, resizeFurniture, resizeRoom, updateOpening } from '../domain/operations';
 import { TEMPLATES } from '../domain/templates';
 import type { Floorplan } from '../domain/types';
 import { validate } from '../domain/validate';
@@ -121,6 +121,11 @@ const schemas = {
     clearanceFrontIn: z.number().optional().describe('Approach space required in front of the piece.'),
     color: z.string().optional().describe('Finish for the primary surfaces, any CSS colour; omit for the default look.'),
   }),
+  resize_furniture: z.object({
+    furnitureId: z.string(),
+    widthIn: z.number().optional().describe('New footprint width in inches; omit to keep the current width.'),
+    depthIn: z.number().optional().describe('New footprint depth in inches; omit to keep the current depth.'),
+  }),
   move_furniture: z.object({
     furnitureId: z.string(),
     position: z.object({ x: z.number(), y: z.number() }).optional()
@@ -135,7 +140,7 @@ const schemas = {
   }),
   apply_edits: z.object({
     edits: z.array(z.object({ action: z.string() }).passthrough()).min(1).max(20)
-      .describe('Each edit is {action, ...params}: the action names another write tool (place_furniture, move_furniture, update_opening, add_opening, remove_element, move_wall, resize_room, add_room) and the params are that tool\'s. Runs in order; a failed edit reports its error and the rest continue.'),
+      .describe('Each edit is {action, ...params}: the action names another write tool (place_furniture, move_furniture, resize_furniture, update_opening, add_opening, remove_element, move_wall, resize_room, add_room) and the params are that tool\'s. Runs in order; a failed edit reports its error and the rest continue.'),
   }),
   remove_element: z.object({
     elementId: z.string().describe('A wall, room, opening or furniture id.'),
@@ -391,6 +396,9 @@ export async function registerFloorplanTools(
   register('move_furniture', 'Move or turn a piece already in the plan; dropping it in another room re-homes it.', (input) =>
     envelope(state().applyOperation((plan) => moveFurniture(plan, input))));
 
+  register('resize_furniture', 'Change a placed piece\'s footprint where it stands; position and rotation stay put.', (input) =>
+    envelope(state().applyOperation((plan) => resizeFurniture(plan, input))));
+
   register('update_opening', 'Change a door, window or archway in place: widen it, convert it, or flip its swing.', (input) =>
     envelope(state().applyOperation((plan) => updateOpening(plan, input))));
 
@@ -398,6 +406,7 @@ export async function registerFloorplanTools(
     const operations = {
       place_furniture: placeFurniture,
       move_furniture: moveFurniture,
+      resize_furniture: resizeFurniture,
       update_opening: updateOpening,
       add_opening: addOpening,
       remove_element: (plan: Floorplan, args: { elementId: string }) => removeElement(plan, args.elementId),

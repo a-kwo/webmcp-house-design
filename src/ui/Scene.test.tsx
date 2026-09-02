@@ -160,6 +160,18 @@ describe('selection actions', () => {
     expect(sofa.rotation).toBe(90);
   });
 
+  it('resizes the piece through the footprint steppers', () => {
+    floorplanStore.getState().select(['sofa-1']);
+    render(<SelectionActions />);
+
+    fireEvent.click(screen.getByTitle('Deeper'));
+
+    const sofa = floorplanStore.getState().plan.furniture.find((item) => item.id === 'sofa-1')!;
+    expect(sofa.footprint).toEqual({ w: 84, d: 42 });
+    // One undo away, like any other edit.
+    expect(floorplanStore.getState().undoStack.length).toBeGreaterThan(0);
+  });
+
   it('removes the piece behind the red cross and clears the selection', () => {
     floorplanStore.getState().select(['sofa-1']);
     render(<SelectionActions />);

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { computeRoomSummaries, roomDimensions } from './geometry';
-import { addOpening, addRoom, moveFurniture, moveWall, placeFurniture, removeElement, resizeRoom, updateOpening } from './operations';
+import { addOpening, addRoom, moveFurniture, moveWall, placeFurniture, removeElement, resizeFurniture, resizeRoom, updateOpening } from './operations';
 import type { OperationResult } from './operations';
 import { sampleFloorplan } from './sampleFloorplan';
 import type { Floorplan } from './types';
@@ -610,5 +610,32 @@ describe('addRoom', () => {
     }));
 
     expect(error).toContain('get_layout');
+  });
+});
+
+describe('resizeFurniture', () => {
+  it('changes the footprint in place and echoes the standing position', () => {
+    const result = expectOk(resizeFurniture(sampleFloorplan, { furnitureId: 'sofa-1', widthIn: 72, depthIn: 30 }));
+
+    const sofa = result.plan.furniture.find((item) => item.id === 'sofa-1')!;
+    expect(sofa.footprint).toEqual({ w: 72, d: 30 });
+    expect(sofa.position).toEqual({ x: 72, y: 72 });
+    expect(result.summary).toContain('72x30in');
+  });
+
+  it('keeps the unspecified dimension', () => {
+    const result = expectOk(resizeFurniture(sampleFloorplan, { furnitureId: 'sofa-1', depthIn: 42 }));
+    expect(result.plan.furniture.find((item) => item.id === 'sofa-1')!.footprint).toEqual({ w: 84, d: 42 });
+  });
+
+  it('refuses a size that would run into the walls', () => {
+    // The sofa sits at x 72; growing it to 160in wide would cross the west wall face.
+    const error = expectFail(resizeFurniture(sampleFloorplan, { furnitureId: 'sofa-1', widthIn: 160 }));
+    expect(error).toContain('runs into the walls of Living Room');
+  });
+
+  it('needs at least one dimension and a real piece', () => {
+    expect(expectFail(resizeFurniture(sampleFloorplan, { furnitureId: 'sofa-1' }))).toContain('widthIn or a depthIn');
+    expect(expectFail(resizeFurniture(sampleFloorplan, { furnitureId: 'ghost', widthIn: 40 }))).toContain('No furniture');
   });
 });

@@ -635,6 +635,59 @@ export function updateOpening(
  * across a doorway re-homes it rather than failing for having left the room
  * it started in.
  */
+/**
+ * Change a placed piece's footprint where it stands: position, rotation and
+ * room stay put, and the resized outline must still clear the wall faces.
+ * Heights come from the catalog and are not part of the plan's data.
+ */
+export function resizeFurniture(
+  plan: Floorplan,
+  input: { furnitureId: string; widthIn?: number; depthIn?: number },
+): OperationResult {
+  const item = plan.furniture.find((candidate) => candidate.id === input.furnitureId);
+  if (!item) {
+    return fail(`No furniture with id "${input.furnitureId}". Call get_layout to list the current furniture ids.`);
+  }
+
+  if (input.widthIn === undefined && input.depthIn === undefined) {
+    return fail(`resize_furniture needs a widthIn or a depthIn for ${item.catalogId} ${item.id}.`);
+  }
+
+  const footprint = {
+    w: input.widthIn ?? item.footprint.w,
+    d: input.depthIn ?? item.footprint.d,
+  };
+  if (footprint.w < 6 || footprint.d < 6) {
+    return fail(`A piece needs at least 6in a side; ${footprint.w}x${footprint.d}in is too small to draw or select.`);
+  }
+
+  const next = clone(plan);
+  const room = next.rooms.find((candidate) => candidate.id === item.roomId)!;
+  const box = interiorBox(next, room);
+  const spans = boundingBox(furniturePolygon({ ...item, footprint }));
+  const fits =
+    spans.minX >= box.minX - FIT_TOLERANCE_IN &&
+    spans.maxX <= box.maxX + FIT_TOLERANCE_IN &&
+    spans.minY >= box.minY - FIT_TOLERANCE_IN &&
+    spans.maxY <= box.maxY + FIT_TOLERANCE_IN;
+
+  if (!fits) {
+    return fail(
+      `Resized to ${footprint.w}x${footprint.d}in, the ${item.catalogId} at (${item.position.x}, ${item.position.y}) would span x ${Math.round(spans.minX)}-${Math.round(spans.maxX)} and y ${Math.round(spans.minY)}-${Math.round(spans.maxY)}, which runs into the walls of ${room.name} (usable interior x ${box.minX}-${box.maxX}, y ${box.minY}-${box.maxY}). Move it further from the wall first, or use a smaller size.`,
+    );
+  }
+
+  const resized = next.furniture.find((candidate) => candidate.id === item.id)!;
+  resized.footprint = footprint;
+
+  return {
+    ok: true,
+    plan: next,
+    changed: [item.id, room.id],
+    summary: `Resized ${item.catalogId} ${item.id} to ${footprint.w}x${footprint.d}in; it stays at (${item.position.x}, ${item.position.y}).`,
+  };
+}
+
 export function moveFurniture(
   plan: Floorplan,
   input: { furnitureId: string; position?: Point; rotation?: number },

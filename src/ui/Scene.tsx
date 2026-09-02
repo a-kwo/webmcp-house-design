@@ -5,7 +5,7 @@ import { Bloom, EffectComposer, N8AO, SMAA, Vignette } from '@react-three/postpr
 import type { ThreeEvent } from '@react-three/fiber';
 import * as THREE from 'three';
 import { catalogItem } from '../domain/catalog';
-import { moveFurniture, placeFurniture, removeElement, updateOpening } from '../domain/operations';
+import { moveFurniture, placeFurniture, removeElement, resizeFurniture, updateOpening } from '../domain/operations';
 import { boundingBox, facingVector, roomPolygon } from '../domain/geometry';
 import { FurnitureModel } from './FurnitureModel';
 import { TEXTURE_SPAN_IN, surfaceTextures } from './textures';
@@ -1275,6 +1275,14 @@ export function SelectionActions() {
     setError(null);
   };
 
+  const resize = (dims: { widthIn?: number; depthIn?: number }) => {
+    if (!item) {
+      return;
+    }
+    const result = applyOperation((current) => resizeFurniture(current, { furnitureId: item.id, ...dims }));
+    setError(result.ok ? null : result.error);
+  };
+
   const rotate = () => {
     if (!item) {
       return;
@@ -1344,7 +1352,14 @@ export function SelectionActions() {
 
   return (
     <div className="selection-actions">
-      <span className="selection-name">{item.catalogId}</span>
+      <span className="selection-name">{item.catalogId} {item.footprint.w}&times;{item.footprint.d}in</span>
+      {/* Footprint steppers, mirroring the opening toolbar's Wider/Narrower:
+          the same resize_furniture operation the agent calls, so a size that
+          would run into a wall is refused with the same message. */}
+      <button type="button" title="Wider" onClick={() => resize({ widthIn: item.footprint.w + 6 })}>W+6</button>
+      <button type="button" title="Narrower" onClick={() => resize({ widthIn: item.footprint.w - 6 })}>W&minus;6</button>
+      <button type="button" title="Deeper" onClick={() => resize({ depthIn: item.footprint.d + 6 })}>D+6</button>
+      <button type="button" title="Shallower" onClick={() => resize({ depthIn: item.footprint.d - 6 })}>D&minus;6</button>
       <button type="button" onClick={rotate}>Rotate 90&deg;</button>
       <kbd>R</kbd>
       <button type="button" className="delete" aria-label={`Remove ${item.catalogId}`} onClick={remove}>
