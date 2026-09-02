@@ -364,11 +364,18 @@ function OpeningPane({
   const glazed = opening.kind === 'window';
   const trim = 2;
   const jambDepth = wall.thickness + 1.5;
+  // Every frame piece bites this far INTO the hole. Casings that stop exactly
+  // at the hole edge share a plane with the wall's cut face, and two coplanar
+  // faces flicker as the depth buffer picks a different winner every frame.
+  // Overlapping the joint by a hair means one face is always simply in front.
+  const bite = 0.4;
 
   return (
     <group position={placement.position} rotation={[0, placement.rotationY, 0]}>
       <mesh onClick={onClick}>
-        <boxGeometry args={[placement.width, placement.height, wall.thickness * 0.35]} />
+        {/* Inset from the hole on every side: a pane cut exactly hole-sized
+            leaves its edges coplanar with the wall's cut faces and flashing. */}
+        <boxGeometry args={[placement.width - bite * 2, placement.height - bite * 2, wall.thickness * 0.35]} />
         {/* Doors and archways read as voids, so their pane is only a click
             target with the faintest tint; windows get actual glass -- near
             zero roughness and a strong environment pickup, so panes catch
@@ -385,20 +392,20 @@ function OpeningPane({
       {/* Casing: jambs up the sides, a head across the top, and a sill under a
           window. Small geometry, but it is what makes a hole read as a doorway
           rather than a missing texture. */}
-      <mesh position={[-placement.width / 2 - trim / 2, 0, 0]} castShadow>
+      <mesh position={[-placement.width / 2 - trim / 2 + bite, 0, 0]} castShadow>
         <boxGeometry args={[trim, placement.height + (glazed ? trim * 2 : trim), jambDepth]} />
         <meshStandardMaterial color={TRIM_COLOR} roughness={0.6} />
       </mesh>
-      <mesh position={[placement.width / 2 + trim / 2, 0, 0]} castShadow>
+      <mesh position={[placement.width / 2 + trim / 2 - bite, 0, 0]} castShadow>
         <boxGeometry args={[trim, placement.height + (glazed ? trim * 2 : trim), jambDepth]} />
         <meshStandardMaterial color={TRIM_COLOR} roughness={0.6} />
       </mesh>
-      <mesh position={[0, placement.height / 2 + trim / 2, 0]} castShadow>
-        <boxGeometry args={[placement.width, trim, jambDepth]} />
+      <mesh position={[0, placement.height / 2 + trim / 2 - bite, 0]} castShadow>
+        <boxGeometry args={[placement.width + trim, trim, jambDepth]} />
         <meshStandardMaterial color={TRIM_COLOR} roughness={0.6} />
       </mesh>
       {glazed ? (
-        <mesh position={[0, -placement.height / 2 - trim / 2, 0]} castShadow>
+        <mesh position={[0, -placement.height / 2 - trim / 2 + bite, 0]} castShadow>
           <boxGeometry args={[placement.width + trim * 2, trim, jambDepth + 1.5]} />
           <meshStandardMaterial color={TRIM_COLOR} roughness={0.6} />
         </mesh>
