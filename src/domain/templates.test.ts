@@ -38,15 +38,12 @@ describe('templates', () => {
     }
   });
 
-  it('opens clean, except the two-bedroom keeping its one demo violation', () => {
+  it('opens every template violation-free', () => {
+    // Violations should arise from design decisions made in the app, not
+    // arrive manufactured in the starting data.
     for (const template of TEMPLATES) {
       const codes = validate(buildTemplate(template.id)).map((violation) => `${template.id}:${violation.code}`);
-
-      if (template.id === 'two-bed') {
-        expect(codes).toEqual(['two-bed:DOOR_MIN_WIDTH']);
-      } else {
-        expect(codes).toEqual([]);
-      }
+      expect(codes).toEqual([]);
     }
   });
 

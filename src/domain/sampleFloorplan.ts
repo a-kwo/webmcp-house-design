@@ -1,4 +1,4 @@
-import { buildTemplate } from './templates';
+import { buildPlan } from './buildPlan';
 import type { Furniture } from './types';
 
 /**
@@ -20,4 +20,32 @@ const furniture: Furniture[] = [
   { id: 'bed-2', catalogId: 'queen-bed', roomId: 'bed2', position: { x: 324, y: 220 }, rotation: 0, footprint: { w: 60, d: 80 }, clearanceFront: 24 },
 ];
 
-export const sampleFloorplan = { ...buildTemplate('two-bed'), furniture };
+// The fixture's own frozen geometry: a copy of the two-bedroom shell as it
+// stood when these tests were written, plus the deliberately narrow 30in
+// bathroom door the rule tests bite on. Deliberately NOT built from the
+// shipping templates -- those are free to grow and reshape without every
+// coordinate-pinned test below needing to move with them.
+export const sampleFloorplan = {
+  ...buildPlan({
+    rooms: [
+      { id: 'living', name: 'Living Room', type: 'living', x: 0, y: 0, w: 216, d: 180 },
+      { id: 'kitchen', name: 'Kitchen', type: 'kitchen', x: 216, y: 0, w: 168, d: 120, wetWalls: ['E'] },
+      { id: 'hall', name: 'Hallway', type: 'hallway', x: 216, y: 120, w: 42, d: 180 },
+      { id: 'bed1', name: 'Bedroom 1', type: 'bedroom', x: 0, y: 180, w: 132, d: 120 },
+      { id: 'bath', name: 'Bathroom', type: 'bathroom', x: 132, y: 180, w: 84, d: 120, wetWalls: ['E'] },
+      { id: 'bed2', name: 'Bedroom 2', type: 'bedroom', x: 258, y: 120, w: 126, d: 180 },
+    ],
+    openings: [
+      { id: 'entry', kind: 'door', at: { x: 0, y: 108 }, width: 36, swing: 'in-left' },
+      { id: 'living-kitchen', kind: 'archway', at: { x: 216, y: 78 }, width: 42, height: 84, swing: 'none' },
+      { id: 'living-bed1', kind: 'door', at: { x: 64, y: 180 }, width: 32, swing: 'in-right' },
+      { id: 'living-hall', kind: 'door', at: { x: 216, y: 150 }, width: 32, swing: 'in-left' },
+      { id: 'hall-bath', kind: 'door', at: { x: 216, y: 237 }, width: 30, swing: 'in-left' },
+      { id: 'hall-bed2', kind: 'door', at: { x: 258, y: 236 }, width: 32, swing: 'in-right' },
+      { id: 'bed1-window', kind: 'window', at: { x: 0, y: 246 }, width: 36 },
+      { id: 'bed2-window', kind: 'window', at: { x: 384, y: 216 }, width: 36 },
+    ],
+    furniture: [],
+  }),
+  furniture,
+};

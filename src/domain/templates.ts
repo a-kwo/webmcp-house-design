@@ -15,10 +15,10 @@ export type Template = {
  * through the same generator, so a template is a handful of rectangles and
  * where its doors sit -- not a second way of building plans.
  *
- * Templates are deliberately unfurnished: furnishing the shell is the work
- * the human and the agent do together, so shipping it done would hand the
- * demo's second act to the template. The two-bedroom keeps one deliberate
- * violation (a 30in bathroom door) so there is something legible to fix.
+ * Templates are deliberately unfurnished and open violation-free:
+ * furnishing the shell is the work the human and the agent do together, and
+ * the constraint engine earns its keep on the problems that arise naturally
+ * from that work, not on ones planted in the data.
  */
 export const TEMPLATES: Template[] = [
   {
@@ -71,7 +71,7 @@ export const TEMPLATES: Template[] = [
   {
     id: 'two-bed',
     name: 'Two Bedroom',
-    description: 'Two bedrooms off a hallway, one door already too narrow. 800 sq ft.',
+    description: 'Two bedrooms and a bath off a central hallway. 800 sq ft.',
     spec: {
       rooms: [
         { id: 'living', name: 'Living Room', type: 'living', x: 0, y: 0, w: 216, d: 180 },
@@ -89,7 +89,7 @@ export const TEMPLATES: Template[] = [
         // end wall leaves the hallway unable to narrow at all without the door
         // running off the wall it sits in.
         { id: 'living-hall', kind: 'door', at: { x: 216, y: 150 }, width: 32, swing: 'in-left' },
-        { id: 'hall-bath', kind: 'door', at: { x: 216, y: 237 }, width: 30, swing: 'in-left' },
+        { id: 'hall-bath', kind: 'door', at: { x: 216, y: 237 }, width: 32, swing: 'in-left' },
         { id: 'hall-bed2', kind: 'door', at: { x: 258, y: 236 }, width: 32, swing: 'in-right' },
         { id: 'bed1-window', kind: 'window', at: { x: 0, y: 246 }, width: 36 },
         { id: 'bed2-window', kind: 'window', at: { x: 384, y: 216 }, width: 36 },

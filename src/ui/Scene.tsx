@@ -389,6 +389,7 @@ function OpeningPane({
           envMapIntensity={glazed ? 2.2 : 0.3}
         />
       </mesh>
+      {glazed ? <WindowSash width={placement.width - bite * 2} height={placement.height - bite * 2} depth={wall.thickness * 0.35 + 0.8} /> : null}
       {/* Casing: jambs up the sides, a head across the top, and a sill under a
           window. Small geometry, but it is what makes a hole read as a doorway
           rather than a missing texture. */}
@@ -416,10 +417,67 @@ function OpeningPane({
 }
 
 /**
+ * A double-hung sash inside a window's glass: a frame around the perimeter,
+ * a thicker meeting rail where the two sashes overlap, and muntin bars
+ * dividing each sash into lites. One sheet of blue glass reads as a hole
+ * with a tint; the grid is what reads as a window.
+ */
+function WindowSash({ width, height, depth }: { width: number; height: number; depth: number }) {
+  const frame = 1.4;
+  const muntin = 0.8;
+  // Sparingly divided: every window is a one-over-one double-hung, and only
+  // a wide one earns a single centre muntin. Busy grids read as cottage
+  // kitsch at this scale. The overhead views cut walls short and truncate
+  // window holes with them -- cramming the rail and bars into that short
+  // strip read as a vent, so a shortened window keeps only its frame.
+  const tallEnough = height >= 30;
+  const verticals = tallEnough && width >= 44 ? [0] : [];
+  const wood = <meshStandardMaterial color={TRIM_COLOR} roughness={0.55} />;
+
+  return (
+    <group>
+      <mesh position={[0, height / 2 - frame / 2, 0]} castShadow>
+        <boxGeometry args={[width, frame, depth]} />
+        {wood}
+      </mesh>
+      <mesh position={[0, -height / 2 + frame / 2, 0]} castShadow>
+        <boxGeometry args={[width, frame, depth]} />
+        {wood}
+      </mesh>
+      <mesh position={[-width / 2 + frame / 2, 0, 0]} castShadow>
+        <boxGeometry args={[frame, height, depth]} />
+        {wood}
+      </mesh>
+      <mesh position={[width / 2 - frame / 2, 0, 0]} castShadow>
+        <boxGeometry args={[frame, height, depth]} />
+        {wood}
+      </mesh>
+      {/* Meeting rail: where the lower sash overlaps the upper. */}
+      {tallEnough ? (
+        <mesh position={[0, 0, 0]} castShadow>
+          <boxGeometry args={[width, 1.8, depth + 0.4]} />
+          {wood}
+        </mesh>
+      ) : null}
+      {verticals.map((x) => (
+        <mesh key={x} position={[x, 0, 0]}>
+          <boxGeometry args={[muntin, height, depth]} />
+          {wood}
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
+/**
  * The door itself, standing ajar on its hinge. The swing data already says
  * which jamb it hangs from and which way it opens, so the leaf is pure
  * decoration derived from state the constraint engine uses anyway. Sliding
  * and fixed openings have no leaf to show.
+ *
+ * Built as a two-panel shaker door rather than a flat slab: recessed panels
+ * on both faces, a knob at hand height on the latch edge, and hinges on the
+ * hinge line. The details are what read as "door" instead of "plank".
  */
 function DoorLeaf({ opening, width, height }: { opening: Opening; width: number; height: number }) {
   const swing = opening.swing;
@@ -433,13 +491,84 @@ function DoorLeaf({ opening, width, height }: { opening: Opening; width: number;
   // Ajar at ~55deg: open enough to read as a door, closed enough not to fill
   // the room. Sign chosen so the leaf sweeps toward the side the arc sweeps.
   const angle = (hingedLeft ? 1 : -1) * (inward ? 1 : -1) * 0.95;
+  const direction = hingedLeft ? 1 : -1;
+
+  const panelW = width - 8;
+  // Local y = 0 is the middle of the leaf; the knob sits at hand height off
+  // the floor, which is the leaf's bottom edge.
+  const knobY = -height / 2 + Math.min(37, height * 0.47);
+  const chrome = <meshStandardMaterial color="#c9cdd1" metalness={0.85} roughness={0.2} envMapIntensity={1.3} />;
+
+  const panels = [
+    { y: height * 0.16, h: height * 0.44 },
+    { y: -height * 0.28, h: height * 0.3 },
+  ];
 
   return (
     <group position={[hingeX, 0, 0]} rotation={[0, angle, 0]}>
-      <mesh position={[hingedLeft ? width / 2 : -width / 2, 0, 0]} castShadow>
-        <boxGeometry args={[width, height, 1.6]} />
-        <meshStandardMaterial color="#cfc8ba" roughness={0.65} />
-      </mesh>
+      {/* Hinges on the hinge line: a leaf plate with a knuckle barrel, the
+          detail that says "hung", not "glued". */}
+      {[height * 0.36, 0, -height * 0.36].map((y) => (
+        <group key={y} position={[direction * 0.3, y, 0]}>
+          <mesh castShadow>
+            <boxGeometry args={[0.4, 3.4, 1.7]} />
+            {chrome}
+          </mesh>
+          <mesh position={[-direction * 0.3, 0, 0]} castShadow>
+            <cylinderGeometry args={[0.35, 0.35, 3.7, 10]} />
+            {chrome}
+          </mesh>
+        </group>
+      ))}
+      <group position={[direction * (width / 2), 0, 0]}>
+        <mesh castShadow>
+          <boxGeometry args={[width, height, 1.6]} />
+          <meshStandardMaterial color="#d7d1c3" roughness={0.55} />
+        </mesh>
+        {/* Latch bolt plate on the leading edge. */}
+        <mesh position={[direction * (width / 2), knobY, 0]} castShadow>
+          <boxGeometry args={[0.35, 4.5, 1.1]} />
+          {chrome}
+        </mesh>
+        {/* Recessed shaker panels on both faces, in three steps: a dark
+            reveal, a bevel ring, and the field standing proud of both --
+            the middle step is what catches light like routed timber. */}
+        {[1, -1].flatMap((face) =>
+          panels.map((panel) => (
+            <group key={`${face}-${panel.y}`}>
+              <mesh position={[0, panel.y, face * 0.82]}>
+                <boxGeometry args={[panelW + 2.4, panel.h + 2.4, 0.08]} />
+                <meshStandardMaterial color="#aaa294" roughness={0.68} />
+              </mesh>
+              <mesh position={[0, panel.y, face * 0.87]}>
+                <boxGeometry args={[panelW + 1.2, panel.h + 1.2, 0.1]} />
+                <meshStandardMaterial color="#bfb8a9" roughness={0.62} />
+              </mesh>
+              <mesh position={[0, panel.y, face * 0.94]} castShadow>
+                <boxGeometry args={[panelW, panel.h, 0.2]} />
+                <meshStandardMaterial color="#d2cbbc" roughness={0.58} />
+              </mesh>
+            </group>
+          )),
+        )}
+        {/* Knob, rosette and stem on both faces of the latch edge. */}
+        {[1, -1].map((face) => (
+          <group key={face} position={[direction * (width / 2 - 2.8), knobY, 0]}>
+            <mesh position={[0, 0, face * 0.95]} rotation={[Math.PI / 2, 0, 0]} castShadow>
+              <cylinderGeometry args={[1.3, 1.3, 0.4, 16]} />
+              {chrome}
+            </mesh>
+            <mesh position={[0, 0, face * 1.4]} rotation={[Math.PI / 2, 0, 0]} castShadow>
+              <cylinderGeometry args={[0.5, 0.5, 0.9, 10]} />
+              {chrome}
+            </mesh>
+            <mesh position={[0, 0, face * 1.95]} castShadow>
+              <sphereGeometry args={[1.15, 14, 12]} />
+              {chrome}
+            </mesh>
+          </group>
+        ))}
+      </group>
     </group>
   );
 }
