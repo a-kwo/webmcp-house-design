@@ -181,6 +181,12 @@ function ScreenPanel({ x = 0, y, z = 0, sw, sh }: { x?: number; y: number; z?: n
           emissiveIntensity={0.35}
         />
       </mesh>
+      {/* Chin details: a brushed speaker strip and a standby LED. */}
+      <Part x={x} y={y - sh / 2 + 0.5} z={z + 0.9} sx={sw * 0.3} sy={0.5} sz={0.2} color="#3c3f43" roughness={0.5} metalness={0.5} />
+      <mesh position={[x + sw * 0.42, y - sh / 2 + 0.6, z + 0.95]}>
+        <sphereGeometry args={[0.28, 8, 8]} />
+        <meshStandardMaterial color="#7ec8a8" emissive="#2e8f68" emissiveIntensity={2} roughness={0.3} />
+      </mesh>
     </>
   );
 }
@@ -197,11 +203,20 @@ function Bed({ w, d, h, tint }: ModelProps) {
       <Part y={legs + frame / 2} sx={w} sy={frame} sz={d} color={WOOD} roughness={0.6} />
       <Part y={legs + frame + mattress / 2} sx={w * 0.97} sy={mattress} sz={d * 0.98} color={MATTRESS} roughness={0.95} radius={2.4} />
       {/* Duvet over the foot two-thirds, draping past the mattress sides,
-          with a rolled fold line at its head edge. */}
+          with a rolled fold line at its head edge and quilting channels
+          running its length. */}
       <Part y={mattressTop - mattress * 0.1} z={d * 0.19} sx={w * 1.02} sy={mattress * 0.42} sz={d * 0.62} color={tint ?? DUVET} roughness={0.95} radius={2.2} />
       <Part y={mattressTop + mattress * 0.12} z={-d * 0.115} sx={w * 1.02} sy={2.2} sz={5} color={tint ?? DUVET} roughness={0.95} radius={1} />
-      {/* Headboard: a tall rounded panel behind the pillows. */}
+      {[-0.25, 0, 0.25].map((seam) => (
+        <Part key={seam} x={seam * w} y={mattressTop + mattress * 0.11} z={d * 0.21} sx={0.7} sy={0.7} sz={d * 0.56} color={tint ?? DUVET} roughness={0.95} radius={0.3} />
+      ))}
+      {/* A folded throw across the foot of the bed. */}
+      <Part y={mattressTop + mattress * 0.16} z={d * 0.38} sx={w * 1.03} sy={2} sz={d * 0.16} color={tint ? DUVET : '#7a5c48'} roughness={0.95} radius={0.9} />
+      {/* Headboard: a tall rounded panel with vertical channel tufting. */}
       <Part z={-d / 2 + 1.5} y={h * 0.62} sx={w + 2} sy={h * 1.25} sz={3} color={DARK_WOOD} roughness={0.6} radius={1.4} />
+      {[-0.3, -0.1, 0.1, 0.3].map((groove) => (
+        <Part key={groove} x={groove * w} z={-d / 2 + 3.1} y={h * 0.72} sx={0.6} sy={h * 0.95} sz={0.4} color="#4a3d2e" roughness={0.7} />
+      ))}
       {/* Pillows, each lounging at its own slight angle. */}
       <Part x={-w * 0.22} z={-d * 0.37} y={mattressTop + 2.2} sx={w * 0.36} sy={5} sz={d * 0.17} color={PILLOW} roughness={0.95} radius={2.2} rotation={[0.14, 0.05, 0]} />
       <Part x={w * 0.22} z={-d * 0.37} y={mattressTop + 2.2} sx={w * 0.36} sy={5} sz={d * 0.17} color={PILLOW} roughness={0.95} radius={2.2} rotation={[0.12, -0.04, 0]} />
@@ -238,6 +253,11 @@ function Sofa({ w, d, h, tint }: ModelProps) {
       {/* Throw pillows propped into the corners. */}
       <Part x={-w / 2 + arm + 5} z={-d * 0.14} y={seatTop + 3} sx={13} sy={13} sz={4.5} color={tint ? CUSHION : '#8a6f55'} roughness={0.95} radius={2.4} rotation={[-0.2, 0.35, 0.1]} />
       <Part x={w / 2 - arm - 5} z={-d * 0.14} y={seatTop + 3} sx={13} sy={13} sz={4.5} color={tint ? CUSHION : '#5f6b5c'} roughness={0.95} radius={2.4} rotation={[-0.2, -0.3, -0.08]} />
+      {/* A blanket folded over one arm: a cap resting on the arm's top and a
+          drape standing clear of its outer face -- a coplanar drape z-fights
+          the arm and flickers. */}
+      <Part x={-w / 2 + arm / 2} y={legs + h * 0.65 + 1} sx={arm + 2} sy={2} sz={d * 0.55} color={tint ? '#c9bfa9' : '#a3543f'} roughness={0.98} radius={0.8} />
+      <Part x={-w / 2 - 0.9} y={legs + h * 0.52} sx={1.6} sy={h * 0.28} sz={d * 0.55} color={tint ? '#c9bfa9' : '#a3543f'} roughness={0.98} radius={0.7} />
     </>
   );
 }
@@ -262,6 +282,9 @@ function Toilet({ w, d, h }: ModelProps) {
       <Part z={-d / 2 + d * 0.14} y={h * 0.55} sx={w * 0.92} sy={h * 0.66} sz={d * 0.26} color={PORCELAIN} roughness={0.25} radius={1.6} />
       <Part z={-d / 2 + d * 0.14} y={h * 0.9} sx={w * 0.98} sy={h * 0.08} sz={d * 0.3} color={PORCELAIN} roughness={0.25} radius={1} />
       <Cyl z={-d / 2 + d * 0.14} y={h * 0.95} rTop={1.6} height={0.8} color={CHROME} metalness={0.85} roughness={0.2} />
+      {/* Seat hinge caps where the lid meets the tank. */}
+      <Cyl x={-w * 0.16} z={-d * 0.16} y={h * 0.56 + 0.5} rTop={0.7} height={1} color="#d9d6cf" roughness={0.35} segments={10} />
+      <Cyl x={w * 0.16} z={-d * 0.16} y={h * 0.56 + 0.5} rTop={0.7} height={1} color="#d9d6cf" roughness={0.35} segments={10} />
     </>
   );
 }
@@ -299,6 +322,18 @@ function Island({ w, d, h, tint }: ModelProps) {
       {[-0.22, 0.22].map((seam) => (
         <Cyl key={seam} x={seam * w} z={-d * 0.4 - 1.4} y={h - 8} rTop={0.5} height={w * 0.16} color={CHROME} metalness={0.85} roughness={0.2} rotation={[0, 0, Math.PI / 2]} />
       ))}
+      {/* Life on the worktop: a cutting board and a bowl of fruit. */}
+      <Part x={-w * 0.28} y={h + 0.4} z={-d * 0.1} sx={13} sy={0.8} sz={9} color="#a08453" roughness={0.7} radius={0.4} rotation={[0, 0.3, 0]} />
+      <mesh position={[w * 0.18, h + 1.4, 0]} scale={[1, 0.5, 1]} castShadow>
+        <sphereGeometry args={[4.6, 18, 12]} />
+        <meshStandardMaterial color="#54524c" roughness={0.35} metalness={0.15} envMapIntensity={0.8} />
+      </mesh>
+      {[[-1.6, 0.4], [1.4, 1], [0, -1.4]].map(([fx, fz], index) => (
+        <mesh key={index} position={[w * 0.18 + fx, h + 2.6, fz]} castShadow>
+          <sphereGeometry args={[1.5, 12, 10]} />
+          <meshStandardMaterial color={['#b8503c', '#c9a03c', '#7d9b4a'][index]} roughness={0.5} />
+        </mesh>
+      ))}
     </>
   );
 }
@@ -317,6 +352,10 @@ function Counter({ w, d, h, tint }: ModelProps) {
       {[-0.25, 0, 0.25].map((seam) => (
         <Part key={seam} x={seam * w} z={d / 2 - 0.2} y={(h - 4) / 2 + 1} sx={0.6} sy={h - 10} sz={0.6} color={DARK_WOOD} />
       ))}
+      {/* Shaker-style recessed panel on each door face. */}
+      {[-0.375, -0.125, 0.125, 0.375].map((door) => (
+        <Part key={door} x={door * w} z={d / 2 + 0.05} y={(h - 4) / 2 + 1} sx={w * 0.17} sy={h - 16} sz={0.25} color={tint ? cabinet : '#8f8069'} roughness={0.75} />
+      ))}
       {[-0.12, 0.13].map((pull) => (
         <Cyl key={pull} x={pull * w} z={d / 2 + 0.6} y={h * 0.62} rTop={0.5} height={w * 0.12} color={CHROME} metalness={0.85} roughness={0.2} rotation={[0, 0, Math.PI / 2]} />
       ))}
@@ -329,9 +368,12 @@ function DiningTable({ w, d, h, tint }: ModelProps) {
 
   return (
     <>
-      {/* A slab top with a soft edge over an apron, on tapered round legs. */}
+      {/* A slab top with a soft edge over an apron, on tapered round legs,
+          dressed with a runner. (A centrepiece was tried and read as a
+          button from the overhead views.) */}
       <Part y={h - 1.2} sx={w} sy={2.4} sz={d} color={wood} roughness={0.45} radius={0.9} />
       <Part y={h - 4} sx={w - 7} sy={3} sz={d - 7} color={wood} roughness={0.55} />
+      <Part y={h + 0.15} sx={w * 0.32} sy={0.3} sz={d + 4} color={tint ? '#d9d2c2' : '#cbc2ad'} roughness={0.95} />
       {[-1, 1].flatMap((lx) =>
         [-1, 1].map((lz) => (
           <Cyl
@@ -370,15 +412,18 @@ function Range({ w, d, h, tint }: ModelProps) {
           </group>
         )),
       )}
-      {/* Control ledge at the back with knobs. */}
+      {/* Control ledge at the back: knobs around a lit clock display. */}
       <Part z={-d / 2 + 1.2} y={h + 2.5} sx={w} sy={5} sz={2.4} color={body} roughness={0.3} metalness={0.7} />
-      {[-0.3, -0.1, 0.1, 0.3].map((kx) => (
+      {[-0.36, -0.24, 0.24, 0.36].map((kx) => (
         <Cyl key={kx} x={kx * w} y={h + 2.5} z={-d / 2 + 2.6} rTop={1.1} height={0.8} color="#1f1f1f" roughness={0.45} rotation={[Math.PI / 2, 0, 0]} />
       ))}
-      {/* Oven door: brushed front, glossy window, chrome bar handle. */}
+      <Part z={-d / 2 + 2.5} y={h + 2.5} sx={w * 0.24} sy={1.6} sz={0.4} color="#101113" roughness={0.3} emissive="#2f7f5f" />
+      {/* Oven door: brushed front, glossy window, chrome bar handle, and the
+          broiler drawer seam below. */}
       <Part z={d / 2 - 0.6} y={h * 0.35} sx={w * 0.88} sy={h * 0.42} sz={1} color="#3a3a3e" roughness={0.35} metalness={0.5} />
       <Part z={d / 2 + 0.1} y={h * 0.38} sx={w * 0.6} sy={h * 0.22} sz={0.6} color={SCREEN} roughness={0.06} metalness={0.3} />
       <Cyl z={d / 2 + 1.6} y={h * 0.62} rTop={0.8} height={w * 0.8} color={CHROME} metalness={0.85} roughness={0.18} rotation={[0, 0, Math.PI / 2]} />
+      <Part z={d / 2 + 0.05} y={h * 0.08} sx={w * 0.88} sy={0.4} sz={0.3} color="#232326" roughness={0.5} />
     </>
   );
 }
@@ -389,12 +434,19 @@ function Television({ w, d, h, tint }: ModelProps) {
 
   return (
     <>
-      {/* Media console on angled legs: two door fronts with a shadow gap. */}
+      {/* Media console on angled legs: door fronts flanking an open bay with
+          a soundbar and a set-top box glowing standby inside it. */}
       <Legs w={w} d={d} height={legH} inset={2.5} />
       <Part y={legH + (cabinet - legH) / 2} sx={w} sy={cabinet - legH} sz={d} color={tint ?? DARK_WOOD} roughness={0.55} radius={0.9} />
-      {[-0.24, 0.24].map((door) => (
-        <Part key={door} x={door * w} z={d / 2 + 0.15} y={legH + (cabinet - legH) / 2} sx={w * 0.44} sy={cabinet - legH - 3} sz={0.5} color={tint ?? WOOD} roughness={0.6} radius={0.4} />
+      {[-0.32, 0.32].map((door) => (
+        <Part key={door} x={door * w} z={d / 2 + 0.15} y={legH + (cabinet - legH) / 2} sx={w * 0.3} sy={cabinet - legH - 3} sz={0.5} color={tint ?? WOOD} roughness={0.6} radius={0.4} />
       ))}
+      <Part z={d / 2 + 0.1} y={legH + (cabinet - legH) / 2} sx={w * 0.3} sy={cabinet - legH - 3} sz={0.3} color="#1a1b1d" roughness={0.75} />
+      <Part z={d / 2 + 0.35} y={legH + (cabinet - legH) * 0.32} sx={w * 0.26} sy={1.8} sz={0.7} color="#26282b" roughness={0.5} metalness={0.4} />
+      <mesh position={[w * 0.1, legH + (cabinet - legH) * 0.62, d / 2 + 0.5]}>
+        <sphereGeometry args={[0.25, 8, 8]} />
+        <meshStandardMaterial color="#e8b46a" emissive="#c07f2a" emissiveIntensity={2} roughness={0.3} />
+      </mesh>
       {/* The panel on its centre column and foot. */}
       <Cyl y={cabinet + h * 0.06} rTop={1.4} height={h * 0.12} color={BEZEL} roughness={0.4} metalness={0.5} />
       <Part y={cabinet + 0.8} sx={w * 0.28} sy={1.2} sz={d * 0.5} color={BEZEL} roughness={0.4} metalness={0.5} radius={0.5} />
@@ -413,12 +465,21 @@ function Fridge({ w, d, h, tint }: ModelProps) {
       {/* Door fronts sit a hair proud so their shadow line reads. */}
       <Part z={d / 2 + 0.25} y={split + (h - split) / 2 - 1} sx={w - 1.6} sy={h - split - 2.4} sz={0.5} color={body} roughness={0.28} metalness={0.75} radius={0.6} />
       <Part z={d / 2 + 0.25} y={split / 2 + 0.6} sx={w - 1.6} sy={split - 2.8} sz={0.5} color={body} roughness={0.28} metalness={0.75} radius={0.6} />
-      {/* Recessed water dispenser in the upper door. */}
+      {/* Recessed water dispenser: dark well, drip tray, two paddle buttons. */}
       <Part x={-w * 0.18} z={d / 2 + 0.45} y={split + (h - split) * 0.42} sx={w * 0.26} sy={(h - split) * 0.5} sz={0.4} color="#2c2e30" roughness={0.6} />
+      <Part x={-w * 0.18} z={d / 2 + 0.62} y={split + (h - split) * 0.2} sx={w * 0.2} sy={0.8} sz={0.5} color="#4a4d50" roughness={0.4} metalness={0.5} />
+      <Part x={-w * 0.18} z={d / 2 + 0.55} y={split + (h - split) * 0.45} sx={w * 0.1} sy={(h - split) * 0.22} sz={0.3} color="#414447" roughness={0.5} />
+      {/* Gasket shadow lines around each door face. */}
+      <Part z={d / 2 + 0.52} y={split + (h - split) / 2 - 1} sx={w - 3} sy={0.35} sz={0.15} color="#54575a" roughness={0.6} />
+      <Part z={d / 2 + 0.52} y={split - 1.6} sx={w - 3} sy={0.35} sz={0.15} color="#54575a" roughness={0.6} />
       {/* Long bar handles. */}
       <Cyl x={w * 0.34} z={d / 2 + 1.6} y={split + (h - split) * 0.5} rTop={0.7} height={(h - split) * 0.66} color={CHROME} metalness={0.85} roughness={0.18} />
       <Cyl x={w * 0.34} z={d / 2 + 1.6} y={split * 0.68} rTop={0.7} height={split * 0.5} color={CHROME} metalness={0.85} roughness={0.18} />
+      {/* Vented plinth grille. */}
       <Part y={1.2} z={d / 2 - 0.5} sx={w - 2} sy={2.4} sz={1} color="#242527" roughness={0.7} />
+      {[-0.3, -0.15, 0, 0.15, 0.3].map((slat) => (
+        <Part key={slat} x={slat * w} y={1.2} z={d / 2 + 0.05} sx={w * 0.1} sy={1.4} sz={0.2} color="#333537" roughness={0.6} />
+      ))}
     </>
   );
 }
@@ -440,6 +501,18 @@ function Desk({ w, d, h, tint }: ModelProps) {
       <Cyl x={-w / 2 + 2} z={d / 2 - 2} y={(h - 2) / 2} rTop={0.9} height={h - 2} color="#4a4c4e" metalness={0.6} roughness={0.35} />
       <Cyl x={-w / 2 + 2} z={-d / 2 + 2} y={(h - 2) / 2} rTop={0.9} height={h - 2} color="#4a4c4e" metalness={0.6} roughness={0.35} />
       <Part x={-w / 2 + 2} y={1} sx={2.4} sy={1.4} sz={d - 3} color="#4a4c4e" metalness={0.6} roughness={0.35} />
+      {/* An open laptop and a mug, angled like someone just stepped away. */}
+      <group position={[-w * 0.1, h, d * 0.05]} rotation={[0, 0.25, 0]}>
+        <Part y={0.35} sx={11} sy={0.7} sz={8} color="#b9bcc0" roughness={0.35} metalness={0.7} radius={0.3} />
+        <group position={[0, 0.5, -3.8]} rotation={[0.55, 0, 0]}>
+          <Part y={3.4} sx={11} sy={7} sz={0.5} color="#b9bcc0" roughness={0.4} metalness={0.7} radius={0.3} />
+          <mesh position={[0, 3.4, 0.35]}>
+            <boxGeometry args={[10, 6, 0.1]} />
+            <meshStandardMaterial color={SCREEN} roughness={0.08} metalness={0.3} envMapIntensity={1.4} emissive="#1b2a3d" emissiveIntensity={0.5} />
+          </mesh>
+        </group>
+      </group>
+      <Cyl x={w * 0.12} z={d * 0.18} y={h + 1.4} rTop={1.3} height={2.8} color="#8a4a3c" roughness={0.55} segments={14} />
     </>
   );
 }
@@ -537,6 +610,16 @@ function Bookshelf({ w, d, h, tint }: ModelProps) {
         }
         return <group key={shelf}>{spines}</group>;
       })}
+      {/* A potted plant on top -- the one organic shape in the room. */}
+      <group position={[w * 0.28, h, 0]}>
+        <Cyl y={1.6} rTop={2.2} rBottom={1.7} height={3.2} color="#9c5f43" roughness={0.8} segments={14} />
+        {[[0, 0, 0, 2.6], [-1.4, -0.6, 0.4, 1.8], [1.2, 0.5, -0.5, 1.9], [0.3, 1.2, 0.9, 1.5]].map(([px, pz, py, r], index) => (
+          <mesh key={index} position={[px, 4 + py, pz]} castShadow>
+            <sphereGeometry args={[r, 10, 8]} />
+            <meshStandardMaterial color={index % 2 ? '#4e6b3d' : '#5d7c46'} roughness={0.9} />
+          </mesh>
+        ))}
+      </group>
     </>
   );
 }
@@ -559,6 +642,16 @@ function Nightstand({ w, d, h, tint }: ModelProps) {
         <sphereGeometry args={[0.9, 14, 14]} />
         <meshStandardMaterial color={CHROME} metalness={0.85} roughness={0.2} envMapIntensity={1.2} />
       </mesh>
+      {/* A small lamp, shade faintly warm as if the bulb were on low. */}
+      <group position={[-w * 0.16, h, -d * 0.12]}>
+        <Cyl y={0.4} rTop={2.2} height={0.8} color={DARK_WOOD} roughness={0.6} segments={14} />
+        <Cyl y={3.4} rTop={0.4} height={6} color={CHROME} metalness={0.8} roughness={0.25} />
+        <Cyl y={7.6} rTop={2.4} rBottom={3.4} height={4.2} color="#e8ddc4" roughness={0.9} segments={16} />
+        <mesh position={[0, 7.6, 0]}>
+          <cylinderGeometry args={[2.3, 3.3, 4, 16]} />
+          <meshStandardMaterial color="#f3e6c6" emissive="#d9a85e" emissiveIntensity={0.5} roughness={0.9} side={2} />
+        </mesh>
+      </group>
     </>
   );
 }
@@ -599,6 +692,10 @@ function Wardrobe({ w, d, h, tint }: ModelProps) {
       {[-1, 1].map((side) => (
         <Part key={side} x={side * w * 0.24} z={d / 2 + 0.25} y={h * 0.5} sx={w * 0.44} sy={h * 0.88} sz={0.5} color={wood} roughness={0.55} radius={0.5} />
       ))}
+      {/* Recessed shaker panel on each door. */}
+      {[-1, 1].map((side) => (
+        <Part key={side} x={side * w * 0.24} z={d / 2 + 0.45} y={h * 0.5} sx={w * 0.3} sy={h * 0.7} sz={0.2} color={tint ? wood : '#7d6a50'} roughness={0.7} />
+      ))}
       <Cyl x={-w * 0.05} z={d / 2 + 1} y={h * 0.5} rTop={0.6} height={h * 0.22} color={CHROME} metalness={0.85} roughness={0.2} />
       <Cyl x={w * 0.05} z={d / 2 + 1} y={h * 0.5} rTop={0.6} height={h * 0.22} color={CHROME} metalness={0.85} roughness={0.2} />
     </>
@@ -606,15 +703,26 @@ function Wardrobe({ w, d, h, tint }: ModelProps) {
 }
 
 function Tub({ w, d, h }: ModelProps) {
+  const wall = 4;
+
   return (
     <>
-      <Part y={h / 2} sx={w} sy={h} sz={d} color={PORCELAIN} roughness={0.25} radius={2.6} />
-      {/* Rolled rim over a darker basin inset. */}
-      <Part y={h - 1.6} sx={w - 5} sy={2} sz={d - 5} color="#cfccc4" roughness={0.3} radius={1.6} />
-      <Part y={h - 0.5} sx={w} sy={1.2} sz={d} color={PORCELAIN} roughness={0.2} radius={2.6} />
-      {/* Chrome filler and spout at one end. */}
-      <Cyl x={-w / 2 + 4} y={h + 2.5} rTop={0.7} height={5} color={CHROME} metalness={0.9} roughness={0.15} />
-      <Cyl x={-w / 2 + 5.5} y={h + 4.6} rTop={0.6} height={4} color={CHROME} metalness={0.9} roughness={0.15} rotation={[0, 0, Math.PI / 2]} />
+      {/* Built genuinely hollow -- a floor slab inside four walls with a
+          rolled rim -- so looking in shows a basin, not a filled block. */}
+      <Part y={1.5} sx={w - 3} sy={3} sz={d - 3} color="#e4e1da" roughness={0.3} radius={1} />
+      <Part z={-d / 2 + wall / 2} y={h / 2} sx={w} sy={h} sz={wall} color={PORCELAIN} roughness={0.25} radius={1.8} />
+      <Part z={d / 2 - wall / 2} y={h / 2} sx={w} sy={h} sz={wall} color={PORCELAIN} roughness={0.25} radius={1.8} />
+      <Part x={-w / 2 + wall / 2} y={h / 2} sx={wall} sy={h} sz={d} color={PORCELAIN} roughness={0.25} radius={1.8} />
+      <Part x={w / 2 - wall / 2} y={h / 2} sx={wall} sy={h} sz={d} color={PORCELAIN} roughness={0.25} radius={1.8} />
+      {/* Rim lips over each wall, leaving the middle open. */}
+      <Part z={-d / 2 + wall / 2} y={h - 0.5} sx={w} sy={1.4} sz={wall + 1.6} color={PORCELAIN} roughness={0.2} radius={0.7} />
+      <Part z={d / 2 - wall / 2} y={h - 0.5} sx={w} sy={1.4} sz={wall + 1.6} color={PORCELAIN} roughness={0.2} radius={0.7} />
+      <Part x={-w / 2 + wall / 2} y={h - 0.5} sx={wall + 1.6} sy={1.4} sz={d} color={PORCELAIN} roughness={0.2} radius={0.7} />
+      <Part x={w / 2 - wall / 2} y={h - 0.5} sx={wall + 1.6} sy={1.4} sz={d} color={PORCELAIN} roughness={0.2} radius={0.7} />
+      {/* Chrome filler on the rim, spout over the basin, drain on its floor. */}
+      <Cyl x={-w / 2 + 2} y={h + 2.5} rTop={0.7} height={5} color={CHROME} metalness={0.9} roughness={0.15} />
+      <Cyl x={-w / 2 + 4} y={h + 4.6} rTop={0.6} height={4.5} color={CHROME} metalness={0.9} roughness={0.15} rotation={[0, 0, Math.PI / 2]} />
+      <Cyl x={-w / 2 + 9} y={3.2} rTop={1.2} height={0.4} color="#9a9da1" roughness={0.3} metalness={0.7} segments={12} />
     </>
   );
 }
@@ -635,10 +743,13 @@ function Shower({ w, d, h }: ModelProps) {
       </mesh>
       <Cyl y={h - 0.6} z={d / 2 - 0.5} x={0} rTop={0.8} height={w} color={CHROME} metalness={0.85} roughness={0.2} rotation={[0, 0, Math.PI / 2]} />
       <Cyl y={h - 0.6} x={w / 2 - 0.5} rTop={0.8} height={d} color={CHROME} metalness={0.85} roughness={0.2} rotation={[Math.PI / 2, 0, 0]} />
-      {/* Shower arm and head in the walled corner. */}
+      {/* Shower arm and head in the walled corner, a vertical door handle on
+          the glass, and a drain set into the tray. */}
       <Cyl z={-d / 2 + 3} y={h * 0.86} rTop={0.6} height={6} color={CHROME} metalness={0.9} roughness={0.15} rotation={[Math.PI / 2.6, 0, 0]} />
       <Cyl z={-d / 2 + 5.5} y={h * 0.83} rTop={2.4} rBottom={2.4} height={0.8} color={CHROME} metalness={0.9} roughness={0.15} rotation={[0.4, 0, 0]} />
       <Cyl z={-d / 2 + 1.2} y={h * 0.45} rTop={1.4} height={1.2} color={CHROME} metalness={0.9} roughness={0.15} rotation={[Math.PI / 2, 0, 0]} />
+      <Cyl x={-w * 0.3} z={d / 2 + 0.4} y={h * 0.5} rTop={0.5} height={12} color={CHROME} metalness={0.9} roughness={0.15} />
+      <Cyl y={4.7} rTop={1.4} height={0.3} color="#8f9296" roughness={0.3} metalness={0.7} segments={12} />
     </>
   );
 }
@@ -647,14 +758,16 @@ function Washer({ w, d, h, tint }: ModelProps) {
   return (
     <>
       <Part y={h / 2} sx={w} sy={h} sz={d} color={tint ?? '#e3e1dc'} roughness={0.35} />
-      {/* Porthole: chrome ring around a domed glass door. */}
+      {/* Porthole: chrome ring around a domed glass door, the drum's ribbed
+          basket just visible behind it. */}
       <mesh position={[0, h * 0.45, d / 2 + 0.3]} rotation={[Math.PI / 2, 0, 0]} castShadow>
         <torusGeometry args={[w * 0.28, 1.2, 12, 32]} />
         <meshStandardMaterial color={CHROME} metalness={0.85} roughness={0.2} envMapIntensity={1.2} />
       </mesh>
+      <Cyl z={d / 2 - 0.6} y={h * 0.45} rTop={w * 0.22} height={1.4} color="#3f4348" roughness={0.4} metalness={0.6} segments={18} rotation={[Math.PI / 2, 0, 0]} />
       <mesh position={[0, h * 0.45, d / 2 + 0.5]} scale={[1, 1, 0.35]} castShadow>
         <sphereGeometry args={[w * 0.26, 20, 16]} />
-        <meshStandardMaterial color="#14161a" roughness={0.05} metalness={0.3} envMapIntensity={1.6} />
+        <meshStandardMaterial color="#14161a" transparent opacity={0.85} roughness={0.05} metalness={0.3} envMapIntensity={1.6} />
       </mesh>
       {/* Control fascia: dial, buttons, detergent drawer. */}
       <Part y={h - 2.5} z={d / 2 + 0.2} sx={w - 2} sy={4} sz={0.8} color="#c9c6c0" roughness={0.4} />
