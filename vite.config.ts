@@ -3,6 +3,11 @@ import react from '@vitejs/plugin-react';
 
 export default defineConfig({
   plugins: [react()],
+  // three must resolve to a single copy: drei and postprocessing each pull it
+  // in, and duplicate instances break instanceof checks and double the bundle.
+  resolve: {
+    dedupe: ['three'],
+  },
   build: {
     rollupOptions: {
       output: {

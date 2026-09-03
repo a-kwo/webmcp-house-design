@@ -2,12 +2,19 @@
   "name": "webmcp-home-design",
   "version": "0.1.0",
   "private": true,
+  "description": "A 3D floorplan editor where a human and an AI agent design the same house together through WebMCP.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/a-kwo/webmcp-house-design.git"
+  },
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "preview": "vite preview"
   },
   "dependencies": {
     "@react-three/drei": "^9.115.0",
